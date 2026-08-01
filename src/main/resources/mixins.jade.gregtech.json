@@ -1,0 +1,13 @@
+{
+	"required": true,
+	"minVersion": "${mixin_min_version}",
+	"package": "${mod_group}.${mixin_package}.gregtech",
+	"refmap": "${mixin_refmap}",
+	"target": "@env(DEFAULT)",
+	"compatibilityLevel": "JAVA_8",
+	"mixins": [
+		"AccessorMTEAEHostablePart"
+	],
+	"client": [
+	]
+}
