@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 
 import com.google.common.cache.CacheBuilder;
@@ -11,24 +12,28 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Collections2;
 
-import it.unimi.dsi.fastutil.Pair;
-import it.unimi.dsi.fastutil.ints.IntReferenceImmutablePair;
-import it.unimi.dsi.fastutil.ints.IntReferencePair;
-import it.unimi.dsi.fastutil.objects.ObjectRBTreeSet;
-
 /**
  * Priority-ordered callback storage.
  *
  * @param <T> callback type
  */
 public class CallbackContainer<T> {
-	private final SortedSet<IntReferencePair<T>> callbacks = new ObjectRBTreeSet<>(
-			Comparator.<IntReferencePair<T>>comparingInt(IntReferencePair::firstInt)
-					.thenComparingInt(p -> System.identityHashCode(p.second())));
+	/**
+	 * 1.12.2: modern uses fastutil's {@code IntReferencePair} /
+	 * {@code IntReferenceImmutablePair} here; the 1.12.2-bundled fastutil (7.1.0)
+	 * does not ship those 8.2+ types, so an equivalent priority-carrying record is
+	 * used instead.
+	 */
+	private record CallbackEntry<T>(int priority, T callback) {
+	}
+
+	private final SortedSet<CallbackEntry<T>> callbacks = new TreeSet<>(
+			Comparator.<CallbackEntry<T>>comparingInt(CallbackEntry::priority)
+					.thenComparingInt(p -> System.identityHashCode(p.callback())));
 	private final LoadingCache<Boolean, Collection<T>> callbacksView = CacheBuilder.newBuilder().build(new CacheLoader<>() {
 		@Override
 		public Collection<T> load(Boolean key) {
-			return Collections2.transform(callbacks, Pair::second);
+			return Collections2.transform(callbacks, CallbackEntry::callback);
 		}
 	});
 
@@ -49,7 +54,7 @@ public class CallbackContainer<T> {
 	 */
 	public void add(int priority, T callback) {
 		Objects.requireNonNull(callback);
-		callbacks.add(IntReferenceImmutablePair.of(priority, callback));
+		callbacks.add(new CallbackEntry<>(priority, callback));
 		callbacksView.invalidateAll();
 	}
 

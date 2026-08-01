@@ -78,8 +78,8 @@ if (accessTransformers.isNotEmpty()) {
     tasks.applyJST {
         accessTransformerFiles.from(
             accessTransformers.split(";")
-            .map { file("src/main/resources/$it") }
-            .onEach { if (!it.exists()) throw GradleException("Could not find accessTransformer file \"$it\"!") })
+                .map { file("src/main/resources/$it") }
+                .onEach { if (!it.exists()) throw GradleException("Could not find accessTransformer file \"$it\"!") })
     }
 }
 

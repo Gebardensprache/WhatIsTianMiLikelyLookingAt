@@ -2,7 +2,7 @@ package snownee.jade.impl.config.entry;
 
 import java.util.function.BiConsumer;
 
-import it.unimi.dsi.fastutil.floats.FloatUnaryOperator;
+import snownee.jade.util.FloatUnaryOperator;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
 import snownee.jade.api.config.IPluginConfig;

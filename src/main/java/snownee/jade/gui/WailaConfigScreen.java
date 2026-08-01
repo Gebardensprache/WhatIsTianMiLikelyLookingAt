@@ -8,7 +8,7 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
-import it.unimi.dsi.fastutil.floats.FloatUnaryOperator;
+import snownee.jade.util.FloatUnaryOperator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiButton;

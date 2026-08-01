@@ -187,5 +187,4 @@ private fun flag(default: Boolean = false): ReadOnlyProperty<Project, Boolean> =
 
 private fun Project.env(name: String): Provider<String> = providers.environmentVariable(name)
 
-private fun Project.gradleProperty(name: String): Provider<String> =
-    provider { findProperty(name)?.toString() }
+private fun Project.gradleProperty(name: String): Provider<String> = providers.gradleProperty(name)

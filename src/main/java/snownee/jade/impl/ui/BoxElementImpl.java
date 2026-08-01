@@ -9,7 +9,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.google.common.collect.Lists;
 
-import it.unimi.dsi.fastutil.floats.FloatConsumer;
+import snownee.jade.util.FloatConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.util.text.ITextComponent;

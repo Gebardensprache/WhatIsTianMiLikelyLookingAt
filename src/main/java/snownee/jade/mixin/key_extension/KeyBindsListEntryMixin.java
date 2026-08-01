@@ -2,6 +2,8 @@ package snownee.jade.mixin.key_extension;
 
 import java.util.Arrays;
 
+import net.minecraft.client.gui.GuiKeyBindingList;
+
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,7 +31,7 @@ import snownee.jade.key_extension.KeyMappingEx;
  * {@code INVOKEVIRTUAL} the handler receives only the method's arguments -- the entry's
  * own binding -- not the loop variable.)
  */
-@Mixin(targets = "net.minecraft.client.gui.GuiKeyBindingList$KeyEntry")
+@Mixin(GuiKeyBindingList.KeyEntry.class)
 public class KeyBindsListEntryMixin {
 	@WrapOperation(
 			method = "drawEntry",

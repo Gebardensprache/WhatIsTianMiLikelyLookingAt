@@ -5,7 +5,6 @@ import java.text.ParseException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import it.unimi.dsi.fastutil.floats.FloatUnaryOperator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiButton;
@@ -14,6 +13,7 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.text.ITextComponent;
 import snownee.jade.gui.config.JadeWidget;
 import snownee.jade.gui.config.OptionsList;
+import snownee.jade.util.FloatUnaryOperator;
 
 public class SliderOptionValue extends OptionValue<Float> {
 
