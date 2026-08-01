@@ -2,7 +2,7 @@ package snownee.jade.api.harvest;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.callback.CallbackContainer;
 
 /**
@@ -23,7 +23,7 @@ public interface ToolTypeRegistry {
 	 * @param id tool type identifier
 	 * @return the registered tool type
 	 */
-	ToolType type(Identifier id);
+	ToolType type(ResourceLocation id);
 
 	/**
 	 * Registers a tool type for the given identifier.
@@ -32,7 +32,7 @@ public interface ToolTypeRegistry {
 	 * @param skipInstaBreakingBlock whether instant-break blocks should be skipped
 	 * @return the registered tool type
 	 */
-	ToolType type(Identifier id, boolean skipInstaBreakingBlock);
+	ToolType type(ResourceLocation id, boolean skipInstaBreakingBlock);
 
 	/**
 	 * Looks up a registered tool type.
@@ -40,7 +40,7 @@ public interface ToolTypeRegistry {
 	 * @param typeId tool type identifier
 	 * @return the tool type or {@code null}
 	 */
-	@Nullable ToolType get(Identifier typeId);
+	@Nullable ToolType get(ResourceLocation typeId);
 
 	/**
 	 * Inserts a tier after an existing tier.
@@ -49,7 +49,7 @@ public interface ToolTypeRegistry {
 	 * @param targetTier existing tier identifier
 	 * @param tier tier to insert
 	 */
-	void insertTierAfter(Identifier typeId, Identifier targetTier, ToolTier tier);
+	void insertTierAfter(ResourceLocation typeId, ResourceLocation targetTier, ToolTier tier);
 
 	/**
 	 * Inserts a tier before an existing tier.
@@ -58,7 +58,7 @@ public interface ToolTypeRegistry {
 	 * @param targetTier existing tier identifier
 	 * @param tier tier to insert
 	 */
-	void insertTierBefore(Identifier typeId, Identifier targetTier, ToolTier tier);
+	void insertTierBefore(ResourceLocation typeId, ResourceLocation targetTier, ToolTier tier);
 
 	/**
 	 * Returns the callback container for tier additions.
@@ -66,7 +66,7 @@ public interface ToolTypeRegistry {
 	 * @param typeId tool type identifier
 	 * @return callback container
 	 */
-	CallbackContainer<ToolTierAddedCallback> tierAddedCallback(Identifier typeId);
+	CallbackContainer<ToolTierAddedCallback> tierAddedCallback(ResourceLocation typeId);
 
 	/**
 	 * Returns the default shears tier.

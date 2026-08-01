@@ -1,31 +1,41 @@
 package snownee.jade.api.ui;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentContents;
-import net.minecraft.network.chat.FormattedText;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.Style;
-import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
 
 /**
- * Component wrapper that provides a dedicated narration string.
+ * ITextComponent wrapper that provides a dedicated narration string.
+ * <p>
+ * 1.12.2: {@code ITextComponent} is a larger interface here than modern's {@code Component} (it declares
+ * {@code setStyle}, {@code appendText}, {@code appendSibling}, {@code createCopy}, {@code getFormattedText},
+ * {@code getUnformattedText}, and {@code iterator()} via {@code Iterable}), so every mutating/copying method is
+ * delegated straight to the wrapped component; only narration lookup is special-cased.
  */
-public class NarratableComponent implements Component {
-	private final Component component;
+public class NarratableComponent implements ITextComponent {
+	private final ITextComponent component;
 	private final @Nullable Supplier<String> narration;
 
-	public NarratableComponent(Component component) {
+	public NarratableComponent(ITextComponent component) {
 		this(component, null);
 	}
 
-	public NarratableComponent(Component component, @Nullable Supplier<String> narration) {
+	public NarratableComponent(ITextComponent component, @Nullable Supplier<String> narration) {
 		this.component = component;
 		this.narration = narration;
+	}
+
+	@Override
+	public ITextComponent setStyle(Style style) {
+		component.setStyle(style);
+		return this;
 	}
 
 	@Override
@@ -34,47 +44,71 @@ public class NarratableComponent implements Component {
 	}
 
 	@Override
-	public ComponentContents getContents() {
-		return component.getContents();
+	public ITextComponent appendText(String text) {
+		component.appendText(text);
+		return this;
 	}
 
 	@Override
-	public List<Component> getSiblings() {
+	public ITextComponent appendSibling(ITextComponent sibling) {
+		component.appendSibling(sibling);
+		return this;
+	}
+
+	@Override
+	public String getUnformattedComponentText() {
+		return component.getUnformattedComponentText();
+	}
+
+	@Override
+	public String getUnformattedText() {
+		return component.getUnformattedText();
+	}
+
+	@Override
+	public String getFormattedText() {
+		return component.getFormattedText();
+	}
+
+	@Override
+	public List<ITextComponent> getSiblings() {
 		return component.getSiblings();
 	}
 
 	@Override
-	public FormattedCharSequence getVisualOrderText() {
-		return component.getVisualOrderText();
+	public ITextComponent createCopy() {
+		return new NarratableComponent(component.createCopy(), narration);
+	}
+
+	@Override
+	public Iterator<ITextComponent> iterator() {
+		return component.iterator();
 	}
 
 	@Override
 	public String toString() {
-		return component.getString();
+		return component.getUnformattedComponentText();
 	}
 
 	public String getNarration() {
-		return narration != null ? narration.get() : component.getString();
+		return narration != null ? narration.get() : component.getUnformattedComponentText();
 	}
 
-	public static Component getNarration(FormattedText text) {
+	public static ITextComponent getNarration(ITextComponent text) {
 		if (text instanceof NarratableComponent narratable) {
-			return Component.literal(narratable.getNarration());
+			return new TextComponentString(narratable.getNarration());
 		}
-		if (text instanceof Component component) {
-			return component;
-		}
-		return Component.literal(text.getString());
+		return text;
 	}
 
-	public static Component attach(Component component, Component narratable) {
+	public static ITextComponent attach(ITextComponent component, ITextComponent narratable) {
 		if (narratable instanceof NarratableComponent narratableComponent) {
 			return new NarratableComponent(component, narratableComponent.narration);
 		}
-		return new NarratableComponent(component, narratable::getString);
+		return new NarratableComponent(component, narratable::getUnformattedComponentText);
 	}
 
-	public static Component translatable(String key, Object... objects) {
+	public static ITextComponent translatable(String key, Object... objects) {
 		boolean hasNarratable = false;
 		for (Object object : objects) {
 			if (object instanceof NarratableComponent) {
@@ -82,7 +116,7 @@ public class NarratableComponent implements Component {
 				break;
 			}
 		}
-		MutableComponent component = Component.translatable(key, objects);
+		ITextComponent component = new TextComponentTranslation(key, objects);
 		if (!hasNarratable) {
 			return component;
 		}
@@ -94,6 +128,6 @@ public class NarratableComponent implements Component {
 				narrationArgs[i] = objects[i];
 			}
 		}
-		return new NarratableComponent(component, () -> Component.translatable(key, narrationArgs).getString());
+		return new NarratableComponent(component, () -> new TextComponentTranslation(key, narrationArgs).getUnformattedComponentText());
 	}
 }

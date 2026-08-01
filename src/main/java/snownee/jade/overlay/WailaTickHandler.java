@@ -1,34 +1,26 @@
 package snownee.jade.overlay;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.jspecify.annotations.Nullable;
 
 import com.google.common.base.Preconditions;
-import com.mojang.serialization.MapCodec;
 
-import net.minecraft.client.GameNarrator;
+import net.minecraft.init.Blocks;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.StringUtil;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec3;
-import snownee.jade.Jade;
+import net.minecraft.entity.Entity;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
+import net.minecraftforge.common.util.Constants;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.AccessorClientHandler;
 import snownee.jade.api.EmptyAccessor;
@@ -53,9 +45,21 @@ import snownee.jade.impl.ui.BoxElementImpl;
 import snownee.jade.track.ProgressTracker;
 import snownee.jade.util.ClientProxy;
 
+/**
+ * 1.12.2 translation notes:
+ * <ul>
+ *   <li>{@code GameNarrator} system dropped entirely (no 1.12.2 equivalent).
+ *       {@link #narrate(Element, boolean)} and {@link #narrate(String, boolean)}
+ *       are kept as no-ops with Javadoc documenting the drop.</li>
+ *   <li>{@code BlockHitResult}/{@code EntityHitResult} unified into {@link RayTraceResult}.</li>
+ *   <li>{@code CustomData} and {@code DataComponents.CUSTOM_DATA} replaced with
+ *       direct {@link NBTTagCompound} reads.</li>
+ *   <li>{@code Identifier} -> {@link ResourceLocation}.</li>
+ *   <li>{@code Level} -> {@link World}, {@code BlockEntity} -> {@link TileEntity}.</li>
+ * </ul>
+ */
 public class WailaTickHandler {
 	public static final String REMOVE_ELEMENTS = "$jade:remove";
-	public static final MapCodec<List<Identifier>> REMOVE_ELEMENTS_CODEC = Identifier.CODEC.listOf().fieldOf(REMOVE_ELEMENTS);
 
 	private String lastNarration = "";
 	private long lastNarrationTime = 0;
@@ -63,37 +67,18 @@ public class WailaTickHandler {
 	public @Nullable BoxElementImpl rootElement;
 	public @Nullable State state;
 
+	/**
+	 * 1.12.2: no GameNarrator system. Kept as a no-op for API compatibility.
+	 */
 	public void narrate(Element element, boolean dedupe) {
-		if (System.currentTimeMillis() - lastNarrationTime < 500) {
-			return;
-		}
-		Component component = element.cachedNarration();
-		if (component == null) {
-			return;
-		}
-		narrate(StringUtil.stripColor(component.getString()), dedupe);
-		lastNarrationTime = System.currentTimeMillis();
+		// 1.12.2: narration dropped
 	}
 
+	/**
+	 * 1.12.2: no GameNarrator system. Kept as a no-op for API compatibility.
+	 */
 	public void narrate(String message, boolean dedupe) {
-		if (message.isEmpty()) {
-			return;
-		}
-		if (dedupe && message.equals(lastNarration)) {
-			return;
-		}
-		CompletableFuture.runAsync(() -> {
-			GameNarrator narrator = Minecraft.getInstance().getNarrator();
-			narrator.logNarratedMessage(message);
-			if (IWailaConfig.get().general().isDebug()) {
-				Jade.LOGGER.info("Narrating: {}", message);
-			}
-			if (narrator.isActive()) {
-				narrator.clear();
-				narrator.narrateMessage(message, true);
-			}
-		});
-		lastNarration = message;
+		// 1.12.2: narration dropped
 	}
 
 	public void clearState() {
@@ -105,8 +90,8 @@ public class WailaTickHandler {
 
 	@SuppressWarnings("deprecation")
 	public void tickClient() {
-		Minecraft mc = Minecraft.getInstance();
-		Level level = mc.level;
+		Minecraft mc = Minecraft.getMinecraft();
+		World level = mc.world;
 		if (level == null) {
 			OverlayRenderer.clearLingerTooltip();
 			clearState();
@@ -125,18 +110,18 @@ public class WailaTickHandler {
 			return;
 		}
 
-		if (ClientProxy.shouldHideWithGui(mc, mc.gui.screen())) {
+		if (ClientProxy.shouldHideWithGui(mc, mc.currentScreen)) {
 			return;
 		}
 
-		Entity entity = mc.getCameraEntity();
+		Entity entity = mc.getRenderViewEntity();
 		if (entity == null) {
 			clearState();
 			return;
 		}
 
 		RayTracing.INSTANCE.fire();
-		HitResult target = RayTracing.INSTANCE.getTarget();
+		RayTraceResult target = RayTracing.INSTANCE.getTarget();
 		if (target == null) {
 			clearState();
 			return;
@@ -145,37 +130,31 @@ public class WailaTickHandler {
 		Accessor<?> accessor;
 		boolean useRayTraceCallback = true;
 		outer:
-		if (target instanceof BlockHitResult blockTarget && blockTarget.getType() != HitResult.Type.MISS) {
-			BlockState state = level.getBlockState(blockTarget.getBlockPos());
-			if (state.isAir()) {
+		if (target.typeOfHit == RayTraceResult.Type.BLOCK && target.getBlockPos() != null) {
+			IBlockState state = level.getBlockState(target.getBlockPos());
+			if (state.getBlock().isAir(state, level, target.getBlockPos())) {
 				accessor = createEmpty(target);
 				break outer;
 			}
-			BlockEntity tileEntity = level.getBlockEntity(blockTarget.getBlockPos());
-			/* off */
+			TileEntity tileEntity = level.getTileEntity(target.getBlockPos());
 			accessor = WailaClientRegistration.instance().blockAccessor()
 					.blockState(state)
 					.blockEntity(tileEntity)
-					.hit(blockTarget)
+					.hit(target)
 					.requireVerification()
 					.build();
-			/* on */
-		} else if (target instanceof EntityHitResult entityTarget) {
-			/* off */
+		} else if (target.typeOfHit == RayTraceResult.Type.ENTITY) {
 			accessor = WailaClientRegistration.instance().entityAccessor()
-					.hit(entityTarget)
-					.entity(entityTarget.getEntity())
+					.hit(target)
+					.entity(target.entityHit)
 					.requireVerification()
 					.build();
-			/* on */
-		} else if (mc.gui.screen() instanceof PreviewOptionsScreen) {
+		} else if (mc.currentScreen instanceof PreviewOptionsScreen) {
 			useRayTraceCallback = false;
-			/* off */
 			accessor = WailaClientRegistration.instance().blockAccessor()
-					.blockState(Blocks.GRASS_BLOCK.defaultBlockState())
-					.hit(new BlockHitResult(entity.position(), Direction.UP, entity.blockPosition(), false))
+					.blockState(Blocks.GRASS.getDefaultState())
+					.hit(new RayTraceResult(entity.getPositionVector(), EnumFacing.UP, entity.getPosition()))
 					.build();
-			/* on */
 		} else {
 			accessor = createEmpty(target);
 		}
@@ -208,7 +187,7 @@ public class WailaTickHandler {
 
 		state = State.create(state, accessor, handler, state == null ? null : state.data);
 		if (accessor.isServerConnected()) {
-			CompoundTag data = accessor.getServerData();
+			NBTTagCompound data = accessor.getServerData();
 			accessor.setServerData(null);
 			List<IServerDataProvider<Accessor<?>>> providers = handler.shouldRequestData(accessor);
 			if (ObjectDataCenter.isTimeElapsed(ObjectDataCenter.rateLimiter)) {
@@ -260,12 +239,9 @@ public class WailaTickHandler {
 		}
 
 		if (accessor.isServersideContent()) {
-			CustomData data = accessor.getServersideRep().getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
-			if (data.tag.contains(REMOVE_ELEMENTS)) {
-				List<Identifier> list = data.tag.read(REMOVE_ELEMENTS_CODEC).orElse(List.of());
-				for (Identifier tag : list) {
-					tooltip.remove(tag);
-				}
+			NBTTagCompound serversideTag = accessor.getServersideRep().getTagCompound();
+			if (serversideTag != null && serversideTag.hasKey(REMOVE_ELEMENTS)) {
+				readRemoveElements(serversideTag, tooltip);
 			}
 		}
 
@@ -289,37 +265,52 @@ public class WailaTickHandler {
 		themes.setThemeOverride(null);
 	}
 
-	private static EmptyAccessor createEmpty(HitResult hit) {
-		BlockHitResult miss;
-		if (hit instanceof BlockHitResult blockHitResult && blockHitResult.getType() == HitResult.Type.MISS) {
-			miss = blockHitResult;
+	/**
+	 * 1.12.2: reads the remove-elements list from raw NBT instead of
+	 * using {@code DataComponents.CUSTOM_DATA}'s codec-based read.
+	 */
+	private static void readRemoveElements(NBTTagCompound tag, Tooltip tooltip) {
+		if (tag.hasKey(REMOVE_ELEMENTS, Constants.NBT.TAG_STRING)) {
+			tooltip.remove(new ResourceLocation(tag.getString(REMOVE_ELEMENTS)));
+		} else if (tag.hasKey(REMOVE_ELEMENTS, Constants.NBT.TAG_LIST)) {
+			NBTTagList list = tag.getTagList(REMOVE_ELEMENTS, Constants.NBT.TAG_STRING);
+			for (int i = 0; i < list.tagCount(); i++) {
+				tooltip.remove(new ResourceLocation(list.getStringTagAt(i)));
+			}
+		}
+	}
+
+	private static EmptyAccessor createEmpty(RayTraceResult hit) {
+		RayTraceResult miss;
+		if (hit.typeOfHit == RayTraceResult.Type.MISS && hit.getBlockPos() != null) {
+			miss = hit;
 		} else {
-			Vec3 vec = hit.getLocation();
-			miss = BlockHitResult.miss(
+			Vec3d vec = hit.hitVec;
+			miss = new RayTraceResult(
 					vec,
-					Direction.getApproximateNearest(vec.x, vec.y, vec.z),
-					BlockPos.containing(vec));
+					EnumFacing.getFacingFromVector((float) vec.x, (float) vec.y, (float) vec.z),
+					new BlockPos(vec));
 		}
 		return WailaClientRegistration.instance().emptyAccessor().hit(miss).build();
 	}
 
-	public void setData(CompoundTag tag) {
+	public void setData(NBTTagCompound tag) {
 		if (state == null) {
 			return;
 		}
 		state = state.withData(tag);
 	}
 
-	public @Nullable CompoundTag getData() {
+	public @Nullable NBTTagCompound getData() {
 		return state == null ? null : state.data;
 	}
 
-	public record State(Accessor<?> accessor, AccessorClientHandler<Accessor<?>> handler, @Nullable CompoundTag data) {
+	public record State(Accessor<?> accessor, AccessorClientHandler<Accessor<?>> handler, @Nullable NBTTagCompound data) {
 		public static State create(
 				@Nullable State prev,
 				Accessor<?> accessor,
 				AccessorClientHandler<Accessor<?>> handler,
-				@Nullable CompoundTag data) {
+				@Nullable NBTTagCompound data) {
 			return new State(accessor, handler, data != null && accessor.verifyData(data) ? data : null);
 		}
 
@@ -335,14 +326,14 @@ public class WailaTickHandler {
 			return icon;
 		}
 
-		public State withData(CompoundTag data) {
+		public State withData(NBTTagCompound data) {
 			if (!verifyData(data)) {
 				return this;
 			}
 			return new State(accessor, handler, data);
 		}
 
-		public boolean verifyData(CompoundTag data) {
+		public boolean verifyData(NBTTagCompound data) {
 			if (data == null) {
 				return true;
 			}

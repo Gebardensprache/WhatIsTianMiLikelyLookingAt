@@ -16,8 +16,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 
-import net.minecraft.core.IdMapper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.Jade;
 import snownee.jade.api.IJadeProvider;
 import snownee.jade.impl.PriorityStore;
@@ -28,7 +27,7 @@ public class PairHierarchyLookup<T extends IJadeProvider> implements IHierarchyL
 	private final Cache<Pair<Class<?>, Class<?>>, List<T>> mergedCache = CacheBuilder.newBuilder().build();
 	protected boolean idMapped;
 	protected @Nullable IdMapper<T> idMapper;
-	protected @Nullable Map<Identifier, T> byKey;
+	protected @Nullable Map<ResourceLocation, T> byKey;
 
 	public PairHierarchyLookup(IHierarchyLookup<T> first, IHierarchyLookup<T> second) {
 		this.first = first;
@@ -121,7 +120,7 @@ public class PairHierarchyLookup<T extends IJadeProvider> implements IHierarchyL
 	}
 
 	@Override
-	public void loadComplete(PriorityStore<Identifier, IJadeProvider> priorityStore) {
+	public void loadComplete(PriorityStore<ResourceLocation, IJadeProvider> priorityStore) {
 		first.loadComplete(priorityStore);
 		second.loadComplete(priorityStore);
 		if (idMapped) {
@@ -135,7 +134,7 @@ public class PairHierarchyLookup<T extends IJadeProvider> implements IHierarchyL
 	}
 
 	@Override
-	public @Nullable T byKey(Identifier key) {
+	public @Nullable T byKey(ResourceLocation key) {
 		return Objects.requireNonNull(byKey).get(key);
 	}
 }

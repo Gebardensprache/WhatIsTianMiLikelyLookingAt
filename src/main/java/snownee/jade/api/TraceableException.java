@@ -4,7 +4,7 @@ import java.io.Serial;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 
 /**
  * Wraps an exception with the Minecraft namespace that triggered it.
@@ -33,7 +33,7 @@ public class TraceableException extends RuntimeException {
 	 * @return a runtime exception to throw
 	 */
 	public static RuntimeException create(Throwable cause, @Nullable String namespace) {
-		if (namespace == null || Identifier.DEFAULT_NAMESPACE.equals(namespace)) {
+		if (namespace == null || "minecraft".equals(namespace)) {
 			if (cause instanceof RuntimeException runtimeException) {
 				return runtimeException;
 			} else {

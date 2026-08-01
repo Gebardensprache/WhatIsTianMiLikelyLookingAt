@@ -5,7 +5,7 @@ import java.util.function.BiFunction;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.IComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -16,14 +16,14 @@ import snownee.jade.api.ui.Element;
  * A template implementation for script languages like KubeJS
  */
 public abstract class TemplateComponentProvider<T extends Accessor<?>> implements IComponentProvider<T> {
-	private final Identifier uid;
+	private final ResourceLocation uid;
 	private final boolean required;
 	private final boolean enabledByDefault;
 	private final int defaultPriority;
 	private BiFunction<T, @Nullable Element, @Nullable Element> iconFunction = (accessor, currentIcon) -> null;
 	private BiConsumer<ITooltip, T> tooltipFunction = (tooltip, accessor) -> {};
 
-	protected TemplateComponentProvider(Identifier uid, boolean required, boolean enabledByDefault, int defaultPriority) {
+	protected TemplateComponentProvider(ResourceLocation uid, boolean required, boolean enabledByDefault, int defaultPriority) {
 		this.uid = uid;
 		this.required = required;
 		this.enabledByDefault = enabledByDefault;
@@ -46,7 +46,7 @@ public abstract class TemplateComponentProvider<T extends Accessor<?>> implement
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return uid;
 	}
 

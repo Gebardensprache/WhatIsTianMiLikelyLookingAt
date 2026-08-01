@@ -1,88 +1,53 @@
 package snownee.jade.gui.config;
 
-import org.joml.Vector2i;
+import java.util.List;
+
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ComponentPath;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.ObjectSelectionList;
-import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.components.WidgetTooltipHolder;
-import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.client.gui.navigation.FocusNavigationEvent;
-import net.minecraft.client.gui.navigation.ScreenDirection;
-import net.minecraft.client.gui.navigation.ScreenRectangle;
-import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import snownee.jade.api.JadeIds;
+import com.google.common.collect.Lists;
 
-public class OptionsNav extends ObjectSelectionList<OptionsNav.Entry> {
-	private static final Identifier NAVBAR_BACKGROUND = JadeIds.JADE("navbar_background");
-	private static final Identifier INWORLD_NAVBAR_BACKGROUND = JadeIds.JADE("inworld_navbar_background");
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.audio.PositionedSoundRecord;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.init.SoundEvents;
+import net.minecraft.util.text.ITextComponent;
+import snownee.jade.gui.BaseOptionsScreen;
+import snownee.jade.gui.config.OptionsList.Title;
+
+/**
+ * 1.12.2: the modern {@code ObjectSelectionList}-based navbar is replaced by a plain rendered column of
+ * category titles. The modern navbar background sprites do not exist in 1.12.2 assets, so the panel is drawn
+ * with a plain rectangle. Scrolling (wheel) is supported when the categories do not fit.
+ */
+public class OptionsNav {
+
+	private static final int COLOR_BACKGROUND = 0x99101010;
+	private static final int COLOR_INDICATOR = 0xFFFFFFFF;
 	private final OptionsList options;
+	private final int width;
+	private final int height;
+	private final int top;
+	private final int itemHeight;
+	private final List<OptionsList.Title> entries = Lists.newArrayList();
 	private int current;
+	private int scroll;
+	private @Nullable Title hovered;
+	private @Nullable FixedTooltipPositioner hoveredTooltip;
 
 	public OptionsNav(OptionsList options, int width, int height, int top, int itemHeight) {
-		super(Minecraft.getInstance(), width, height, top, itemHeight);
 		this.options = options;
-	}
-
-	@Override
-	protected void extractListItems(GuiGraphicsExtractor guiGraphics, int i, int j, float f) {
-		super.extractListItems(guiGraphics, i, j, f);
-		if (children().isEmpty()) {
-			return;
-		}
-		Entry focused = getFocused();
-		if (focused != null && minecraft.getLastInputType().isKeyboard()) {
-			current = children().indexOf(focused);
-		}
-		float top = getY() + 4 - (float) this.scrollAmount() + current * this.defaultEntryHeight;
-		int left = getRowLeft() + 2;
-		guiGraphics.pose().pushMatrix();
-		guiGraphics.pose().translate(0, top);
-		guiGraphics.fill(left, 0, left + 2, defaultEntryHeight - 4, 0xFFFFFFFF);
-		guiGraphics.pose().popMatrix();
-	}
-
-	@Override
-	protected void extractListBackground(GuiGraphicsExtractor guiGraphics) {
-		Identifier Identifier = minecraft.level == null ? NAVBAR_BACKGROUND : INWORLD_NAVBAR_BACKGROUND;
-		guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, Identifier, getX(), getY(), getWidth(), getHeight());
-	}
-
-	@Override
-	protected void extractListSeparators(GuiGraphicsExtractor guiGraphics) {
-		// NO-OP
-	}
-
-	@Override
-	protected void extractSelection(GuiGraphicsExtractor guiGraphics, Entry entry, int i) {
-		// NO-OP
+		this.width = width;
+		this.height = height;
+		this.top = top;
+		this.itemHeight = itemHeight;
 	}
 
 	public void addEntry(OptionsList.Title entry) {
-		super.addEntry(new Entry(this, entry));
-	}
-
-	@Override
-	public int getRowWidth() {
-		return width;
-	}
-
-	//TODO: check if it is still needed
-	@Override
-	protected int scrollBarX() {
-		return getRowLeft() + getRowWidth() - 8;
+		entries.add(entry);
 	}
 
 	public void refresh() {
-		clearEntries();
+		entries.clear();
 		if (options.children().size() <= 1) {
 			return; // only the "no results" entry
 		}
@@ -91,134 +56,97 @@ public class OptionsNav extends ObjectSelectionList<OptionsNav.Entry> {
 				addEntry(titleEntry);
 			}
 		}
+		scroll = Math.max(0, Math.min(scroll, getMaxScroll()));
+	}
+
+	private int getMaxScroll() {
+		return Math.max(0, entries.size() * itemHeight - height);
+	}
+
+	public void extractRenderState(int mouseX, int mouseY, float partialTicks) {
+		Gui.drawRect(0, top, width, top + height, COLOR_BACKGROUND);
+		hovered = null;
+		for (int i = 0; i < entries.size(); i++) {
+			OptionsList.Title entry = entries.get(i);
+			int y = top + i * itemHeight - scroll;
+			if (y + itemHeight < top || y > top + height) {
+				continue;
+			}
+			int textX = 10;
+			if (mouseY >= y && mouseY < y + itemHeight) {
+				hovered = entry;
+			}
+			if (current == i) {
+				Gui.drawRect(2, y + 2, 4, y + itemHeight - 2, COLOR_INDICATOR);
+			}
+			Minecraft mc = Minecraft.getMinecraft();
+			String text = entry.title().getFormattedText();
+			int color = current == i ? 0xFFFFFFFF : 0xFFA0A0A0;
+			mc.fontRenderer.drawString(text, textX, y + (itemHeight - mc.fontRenderer.FONT_HEIGHT) / 2, color);
+		}
+		if (hovered != null) {
+			if (10 + hovered.getTextWidth() > width) {
+				if (hoveredTooltip == null) {
+					hoveredTooltip = new FixedTooltipPositioner(10, top + (itemHeight / 2) - (Minecraft.getMinecraft().fontRenderer.FONT_HEIGHT / 2));
+				}
+				BaseOptionsScreen owner = options.owner();
+				List<String> lines = owner.splitLines(hovered.title().getFormattedText());
+				owner.drawTooltip(lines, hoveredTooltip.positionTooltip(owner.width, owner.height, mouseX, mouseY, 0, 0)[0],
+						hoveredTooltip.positionTooltip(owner.width, owner.height, mouseX, mouseY, 0, 0)[1]);
+			}
+			hoveredTooltip = null;
+		}
+	}
+
+	public boolean isMouseOver(int mouseX, int mouseY) {
+		return mouseX >= 0 && mouseX < width && mouseY >= top && mouseY < top + height;
 	}
 
 	@Nullable
-	@Override
-	public ComponentPath nextFocusPath(FocusNavigationEvent event) {
-		if (event instanceof FocusNavigationEvent.ArrowNavigation nav && nav.direction() == ScreenDirection.RIGHT) {
-			for (Entry entry : children()) {
-				if (entry.title == options.currentTitle) {
-					options.setFocused(options.currentTitle);
-					ComponentPath path = options.nextFocusPath(new FocusNavigationEvent.ArrowNavigation(ScreenDirection.DOWN));
-					options.setFocused(null);
-					return path;
-				}
-			}
+	public Title getEntryAt(int mouseX, int mouseY) {
+		if (!isMouseOver(mouseX, mouseY)) {
+			return null;
 		}
-		return super.nextFocusPath(event);
-	}
-
-	@Override
-	public void setFocused(@Nullable GuiEventListener listener) {
-		super.setFocused(listener);
-		if (minecraft.getLastInputType().isKeyboard() && getFocused() instanceof Entry entry) {
-			options.showOnTop(entry.title);
-		}
-	}
-
-	public @Nullable Entry getCurrentEntry() {
-		if (current >= 0 && current < children().size()) {
-			return children().get(current);
+		int index = (mouseY - top + scroll) / itemHeight;
+		if (index >= 0 && index < entries.size()) {
+			return entries.get(index);
 		}
 		return null;
 	}
 
-	public static class Entry extends ObjectSelectionList.Entry<Entry> {
-
-		private final OptionsList.Title title;
-		private final OptionsNav parent;
-		@Nullable
-		private WidgetTooltipHolder tooltip;
-
-		public Entry(OptionsNav parent, OptionsList.Title title) {
-			this.parent = parent;
-			this.title = title;
-			refreshTooltip();
+	public void mouseClicked(int mouseX, int mouseY, int mouseButton) {
+		if (mouseButton != 0) {
+			return;
 		}
-
-		protected void refreshTooltip() {
-			if (10 + title.getTextWidth() > parent.getRowWidth()) {
-				tooltip = new WidgetTooltipHolder() {
-					@Override
-					public ClientTooltipPositioner createTooltipPositioner(ScreenRectangle screenRectangle, boolean bl, boolean bl2) {
-						return new FixedTooltipPositioner(new Vector2i(
-								screenRectangle.left() + 10,
-								screenRectangle.top() + (screenRectangle.height() / 2) - (title.font.lineHeight / 2)));
-					}
-				};
-				tooltip.set(Tooltip.create(title.title()));
-			} else {
-				tooltip = null;
-			}
-		}
-
-		@Override
-		public void extractContent(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, boolean hovered, float deltaTime) {
-			guiGraphics.text(
-					title.font,
-					title.title().getString(),
-					getContentX() + 10,
-					getContentYMiddle() - (title.font.lineHeight / 2),
-					0xFFFFFFFF);
-			if (isFocused() && parent.minecraft.getLastInputType().isKeyboard()) {
-				int color = 0xFFAAAAAA;
-				int left = getContentX() + 2;
-				int right = getContentRight() - 2;
-				int top = getContentY();
-				int bottom = getContentBottom();
-				guiGraphics.fill(left, top, right, top + 1, color);
-				guiGraphics.fill(left, bottom, right, bottom - 1, color);
-				guiGraphics.fill(left, top, left + 1, bottom, color);
-				guiGraphics.fill(right, top, right - 1, bottom, color);
-			} else if (parent.options.currentTitle == title) {
-				if (!parent.isMouseOver(mouseX, mouseY)) {
-					parent.centerScrollOn(this);
-				}
-				parent.current = parent.children().indexOf(this);
-			}
-			if (tooltip != null) {
-				tooltip.refreshTooltipForNextRenderPass(
-						guiGraphics,
-						mouseX,
-						mouseY,
-						isMouseOver(mouseX, mouseY),
-						isFocused(),
-						getRectangle());
-			}
-		}
-
-		@Override
-		public boolean mouseClicked(MouseButtonEvent event, boolean bl) {
-			if (event.button() == 0) {
-				onPress();
-				return true;
-			}
-			return super.mouseClicked(event, bl);
-		}
-
-		@Override
-		public boolean keyPressed(KeyEvent keyEvent) {
-			if (keyEvent.isSelection()) {
-				this.onPress();
-				return true;
-			}
-			return false;
-		}
-
-		@Override
-		public Component getNarration() {
-			return title.narration;
-		}
-
-		public void onPress() {
-			parent.playDownSound(Minecraft.getInstance().getSoundManager());
-			parent.options.showOnTop(title);
-		}
-
-		public OptionsList.Title getTitle() {
-			return title;
+		OptionsList.Title title = getEntryAt(mouseX, mouseY);
+		if (title != null) {
+			Minecraft.getMinecraft().getSoundHandler().playSound(PositionedSoundRecord.getMasterRecord(
+					SoundEvents.UI_BUTTON_CLICK, 1.0F));
+			options.showOnTop(title);
+			setCurrent(title);
 		}
 	}
 
+	public void mouseScrolled(int amount) {
+		scroll = Math.max(0, Math.min(scroll + amount * itemHeight, getMaxScroll()));
+	}
+
+	public int getCurrent() {
+		return current;
+	}
+
+	@Nullable
+	public Title getCurrentEntry() {
+		if (current >= 0 && current < entries.size()) {
+			return entries.get(current);
+		}
+		return null;
+	}
+
+	public void setCurrent(OptionsList.Title title) {
+		int index = entries.indexOf(title);
+		if (index >= 0) {
+			current = index;
+		}
+	}
 }

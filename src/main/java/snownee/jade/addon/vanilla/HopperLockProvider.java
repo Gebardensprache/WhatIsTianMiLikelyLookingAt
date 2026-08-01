@@ -1,13 +1,12 @@
 package snownee.jade.addon.vanilla;
 
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.block.BlockHopper;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.addon.access.AccessibilityPlugin;
 import snownee.jade.addon.core.ObjectNameProvider;
 import snownee.jade.api.BlockAccessor;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.JadeIds;
@@ -20,16 +19,26 @@ public class HopperLockProvider implements StreamServerDataProvider<BlockAccesso
 
 	@Override
 	public Boolean streamData(BlockAccessor accessor) {
-		return !accessor.getBlockState().getValue(BlockStateProperties.ENABLED);
+		return !accessor.getBlockState().getValue(BlockHopper.ENABLED);
 	}
 
 	@Override
-	public StreamCodec<RegistryFriendlyByteBuf, Boolean> streamCodec() {
-		return ByteBufCodecs.BOOL.cast();
+	public DataCodec<Boolean> streamCodec() {
+		return new DataCodec<>() {
+			@Override
+			public Boolean decode(PacketBuffer buf) {
+				return buf.readBoolean();
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, Boolean value) {
+				buf.writeBoolean(value);
+			}
+		};
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_HOPPER_LOCK;
 	}
 
@@ -59,7 +68,7 @@ public class HopperLockProvider implements StreamServerDataProvider<BlockAccesso
 		}
 
 		@Override
-		public Identifier getUid() {
+		public ResourceLocation getUid() {
 			return JadeIds.MC_HOPPER_LOCK;
 		}
 	}

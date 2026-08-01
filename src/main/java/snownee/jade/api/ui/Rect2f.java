@@ -2,7 +2,8 @@ package snownee.jade.api.ui;
 
 import com.google.common.base.Objects;
 
-import net.minecraft.client.gui.layouts.LayoutElement;
+// 1.12.2: LayoutElement is Jade's own stand-in (see api/ui/LayoutElement) since
+// net.minecraft.client.gui.layouts does not exist before 1.20.
 
 /**
  * Mutable floating-point rectangle used by Jade's layout helpers.
@@ -106,6 +107,10 @@ public class Rect2f {
 	}
 
 	public boolean contains(float x, float y) {
+		return x >= this.xPos && x <= this.xPos + this.width && y >= this.yPos && y <= this.yPos + this.height;
+	}
+
+	public boolean containsPoint(int x, int y) {
 		return x >= this.xPos && x <= this.xPos + this.width && y >= this.yPos && y <= this.yPos + this.height;
 	}
 

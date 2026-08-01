@@ -11,21 +11,20 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import com.mojang.serialization.MapCodec;
 
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.resources.language.I18n;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.world.entity.Display;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.decoration.painting.Painting;
-import net.minecraft.world.entity.item.FallingBlockEntity;
-import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.npc.villager.Villager;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.level.block.Block;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityList;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.item.EntityFallingBlock;
+import net.minecraft.entity.item.EntityPainting;
+import net.minecraft.entity.passive.EntityVillager;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import snownee.jade.api.JadeIds;
 import snownee.jade.api.TraceableException;
 import snownee.jade.api.callback.JadeItemModNameCallback;
@@ -33,9 +32,9 @@ import snownee.jade.api.ui.JadeUI;
 import snownee.jade.impl.WailaClientRegistration;
 import snownee.jade.overlay.DisplayHelper;
 
-public class ModIdentification implements KeyedResourceManagerReloadListener {
+public class ModIdentification {
 
-	public static final Identifier ID = JadeIds.JADE("mod_id");
+	public static final ResourceLocation ID = JadeIds.JADE("mod_id");
 	public static final ModIdentification INSTANCE = new ModIdentification();
 	public static int NAME_MAX_WIDTH = 160;
 	private static final Map<String, Optional<String>> NAMES = Maps.newConcurrentMap();
@@ -44,9 +43,9 @@ public class ModIdentification implements KeyedResourceManagerReloadListener {
 	private static WordCutter wordCutter;
 	private static boolean translated;
 	public static final String JADE_STACK = "$jade:stack";
-	public static final MapCodec<Identifier> JADE_STACK_ID_CODEC = Identifier.CODEC.fieldOf("id").fieldOf(JADE_STACK);
+	public static final MapCodec<ResourceLocation> JADE_STACK_ID_CODEC = JadeCodecs.RESOURCE_LOCATION.fieldOf("id").fieldOf(JADE_STACK);
 	public static final String POLYMER_STACK = "$polymer:stack";
-	public static final MapCodec<Identifier> POLYMER_STACK_ID_CODEC = Identifier.CODEC.fieldOf("id").fieldOf(POLYMER_STACK);
+	public static final MapCodec<ResourceLocation> POLYMER_STACK_ID_CODEC = JadeCodecs.RESOURCE_LOCATION.fieldOf("id").fieldOf(POLYMER_STACK);
 
 	public static WordCutter wordCutter() {
 		WordCutter cutter = wordCutter;
@@ -62,19 +61,6 @@ public class ModIdentification implements KeyedResourceManagerReloadListener {
 		NAMES.clear();
 		CUT_NAMES.clear();
 		wordCutter = null;
-
-		/*
-		List<String> names = List.of(
-				"Minecraft",
-				"Forgified Fabric BlockRenderLayer Registration (v1)",
-				"Pam's HarvestCraft - Food Extended",
-				"Nice Mobs Remastered: Friends & Foes",
-				"Nexus (Tower Defense Battle Mode)",
-				"MrCrayfish's Furniture Mod: Refurbished",
-				"立即重生配置指令 [DCC]doImmediateRespawn Config Command");
-		for (String name : names) {
-			Jade.LOGGER.info("{} -> {}", name, cutName(name, NAME_MAX_WIDTH));
-		}*/
 	}
 
 	public static String cutName(String fullName, int maxWidth) {
@@ -150,14 +136,15 @@ public class ModIdentification implements KeyedResourceManagerReloadListener {
 					Optional<String> fromTranslation = Optional.empty();
 					String key = "jade.modName." + $;
 					if (JadeUI.hasTranslation(key)) {
-						fromTranslation = Optional.of(I18n.get(key));
+						fromTranslation = Optional.of(I18n.format(key));
 					} else {
 						key = "itemGroup." + $;
 						if (JadeUI.hasTranslation(key)) {
-							fromTranslation = Optional.of(I18n.get(key));
+							fromTranslation = Optional.of(I18n.format(key));
 						}
 					}
-					Optional<String> fromLoader = ClientProxy.getModName($, translated).map(ChatFormatting::stripFormatting);
+					Optional<String> fromLoader = ClientProxy.getModName($, translated)
+							.map(s -> TextFormatting.getTextWithoutFormattingCodes(s));
 					if (!translated && fromLoader.isPresent()) {
 						return fromLoader;
 					}
@@ -165,34 +152,48 @@ public class ModIdentification implements KeyedResourceManagerReloadListener {
 				});
 	}
 
-	public static String getModName(Identifier id) {
+	public static String getModName(ResourceLocation id) {
 		return getModName(id.getNamespace()).orElse(id.getNamespace());
 	}
 
 	public static String getModName(Block block) {
-		Identifier id;
+		ResourceLocation id;
 		try {
 			id = CommonProxy.getId(block);
 		} catch (Throwable e) {
-			throw TraceableException.create(e, BuiltInRegistries.BLOCK.getKey(block).getNamespace());
+			throw TraceableException.create(e, block.getRegistryName().getNamespace());
 		}
 		return getModName(id);
 	}
 
-	public static Optional<Identifier> getSpecialId(ItemStack stack) {
-		CustomData data = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
-		if (!CustomData.EMPTY.equals(data)) {
-			if (data.tag.contains(JADE_STACK)) {
-				return data.tag.read(JADE_STACK_ID_CODEC);
-			} else if (data.tag.contains(POLYMER_STACK)) {
-				return data.tag.read(POLYMER_STACK_ID_CODEC);
+	/**
+	 * Returns the mod name for a block state, delegating to the block overload.
+	 */
+	public static String getModName(IBlockState state) {
+		return getModName(state.getBlock());
+	}
+
+	public static Optional<ResourceLocation> getSpecialId(ItemStack stack) {
+		// 1.12.2: components don't exist; use NBT
+		if (stack.hasTagCompound() && stack.getTagCompound() != null) {
+			NBTTagCompound tag = stack.getTagCompound();
+			if (tag.hasKey(JADE_STACK)) {
+				String idStr = tag.getString(JADE_STACK);
+				if (!idStr.isEmpty()) {
+					return Optional.of(new ResourceLocation(idStr));
+				}
+			} else if (tag.hasKey(POLYMER_STACK)) {
+				String idStr = tag.getString(POLYMER_STACK);
+				if (!idStr.isEmpty()) {
+					return Optional.of(new ResourceLocation(idStr));
+				}
 			}
 		}
 		return Optional.empty();
 	}
 
 	public static String getModId(ItemStack stack) {
-		Optional<Identifier> specialId = getSpecialId(stack);
+		Optional<ResourceLocation> specialId = getSpecialId(stack);
 		if (specialId.isPresent()) {
 			return specialId.orElseThrow().getNamespace();
 		}
@@ -210,48 +211,40 @@ public class ModIdentification implements KeyedResourceManagerReloadListener {
 			}
 			id = getModId(stack);
 		} catch (Throwable e) {
-			throw TraceableException.create(e, BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace());
+			throw TraceableException.create(e, Item.REGISTRY.getNameForObject(stack.getItem()).getNamespace());
 		}
 		return getModName(id).orElse(id);
 	}
 
 	public static String getModName(Entity entity) {
-		switch (entity) {
-			case Painting painting -> {
-				return getModName(painting.getVariant().unwrapKey().orElseThrow().identifier());
-			}
-			case ItemEntity itemEntity -> {
-				return getModName(itemEntity.getItem());
-			}
-			case FallingBlockEntity fallingBlock -> {
-				return getModName(fallingBlock.getBlockState().getBlock());
-			}
-			case Villager villager -> {
-				return getModName(villager.getVillagerData().profession().unwrapKey().orElseThrow().identifier());
-			}
-			case Display.ItemDisplay itemDisplay -> {
-				return getModName(itemDisplay.getItemStack());
-			}
-			default -> {
-			}
+		if (entity instanceof EntityPainting painting) {
+			// 1.12.2: Painting doesn't have variants; use registry name of the painting
+			return getModName(EntityList.getKey(painting.getClass()));
+		} else if (entity instanceof EntityItem itemEntity) {
+			return getModName(itemEntity.getItem());
+		} else if (entity instanceof EntityFallingBlock fallingBlock) {
+			return getModName(fallingBlock.getBlock());
+		} else if (entity instanceof EntityVillager villager) {
+			// 1.12.2: Villager profession is int-based, not registry
+			return getModName(EntityList.getKey(villager.getClass()));
 		}
-		Identifier id;
+		ResourceLocation id;
 		try {
-			id = CommonProxy.getId(entity.getType());
+			id = CommonProxy.getId(entity.getClass());
 		} catch (Throwable e) {
-			throw TraceableException.create(e, BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getNamespace());
+			ResourceLocation key = EntityList.getKey(entity.getClass());
+			if (key == null) {
+				key = new ResourceLocation("minecraft");
+			}
+			throw TraceableException.create(e, key.getNamespace());
+		}
+		// 1.12.2: EntityList.getKey returns null for classes without a registry entry
+		// (notably EntityPlayer/EntityPlayerSP, which are never registered as mobs).
+		// Fall back to minecraft so tooltip gathering on the player never NPEs.
+		if (id == null) {
+			id = new ResourceLocation("minecraft");
 		}
 		return getModName(id);
-	}
-
-	@Override
-	public void onResourceManagerReload(ResourceManager manager) {
-		invalidateCache();
-	}
-
-	@Override
-	public Identifier getUid() {
-		return ID;
 	}
 
 	public static void setTranslated(boolean translated) {

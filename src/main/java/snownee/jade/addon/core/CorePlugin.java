@@ -1,13 +1,12 @@
 package snownee.jade.addon.core;
 
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.entity.Entity;
+import net.minecraft.block.Block;
+import net.minecraft.init.Blocks;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.block.material.Material;
+import net.minecraft.util.math.RayTraceResult;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.EmptyAccessor;
@@ -31,7 +30,7 @@ public class CorePlugin implements IWailaPlugin {
 
 	@Override
 	public void register(IWailaCommonRegistration registration) {
-		registration.registerBlockDataProvider(ObjectNameProvider.BlockData.INSTANCE, BlockEntity.class);
+		registration.registerBlockDataProvider(ObjectNameProvider.BlockData.INSTANCE, TileEntity.class);
 	}
 
 	@Override
@@ -68,19 +67,23 @@ public class CorePlugin implements IWailaPlugin {
 		registration.addRayTraceCallback(-10000, this::hideBlocks);
 	}
 
-	private Accessor<?> hideBlocks(HitResult hit, Accessor<?> accessor, Accessor<?> original) {
+	private Accessor<?> hideBlocks(RayTraceResult hit, Accessor<?> accessor, Accessor<?> original) {
 		if (!accessor.isServersideContent() && accessor instanceof BlockAccessor blockAccessor) {
-			TargetOperationRepository<Block, BlockState> operations = WailaCommonRegistration.instance().blockOperations();
+			TargetOperationRepository<Block, IBlockState> operations = WailaCommonRegistration.instance().blockOperations();
 			if (operations.shouldHide(blockAccessor.getBlockState())) {
-				BlockState blockState = blockAccessor.getBlockState();
-				FluidState fluidState = blockState.getFluidState();
-				if (!fluidState.isEmpty()) {
-					if (blockState.getShape(accessor.getLevel(), blockAccessor.getPosition(), CollisionContext.of(accessor.getPlayer()))
-							.isEmpty() || blockState.is(Blocks.BARRIER) && operations.shouldHide(blockState)) {
+				IBlockState blockState = blockAccessor.getBlockState();
+				// 1.12.2: no FluidState; use material check for liquid blocks. In 1.12.2 the liquid
+				// block IS the block state, so we keep it rather than replacing with fluidState.
+				Material material = blockState.getMaterial();
+				boolean isLiquid = material.isLiquid();
+				if (isLiquid) {
+					if (blockState.getCollisionBoundingBox(accessor.getLevel(), blockAccessor.getPosition()) == null
+							|| blockState.getBlock() == Blocks.BARRIER && operations.shouldHide(blockState)) {
+						// 1.12.2: keep the liquid block state (no FluidState to convert)
 						return WailaClientRegistration.instance()
 								.blockAccessor()
 								.from(blockAccessor)
-								.blockState(fluidState.createLegacyBlock())
+								.blockState(blockState)
 								.build();
 					}
 				}

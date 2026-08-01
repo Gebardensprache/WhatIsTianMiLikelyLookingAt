@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "${mixin_min_version}",
+  "package": "${mod_group}.${mixin_package}",
+  "refmap": "${mixin_refmap}",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "MobEffectInstanceMixin",
+    "ServerPlayerMixin"
+  ],
+  "client": [
+    "key_extension.KeyMappingMixin",
+    "key_extension.KeyBindsListMixin",
+    "key_extension.KeyBindsListEntryMixin"
+  ]
+}

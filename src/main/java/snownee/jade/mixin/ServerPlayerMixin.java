@@ -3,10 +3,10 @@ package snownee.jade.mixin;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import snownee.jade.util.JadeServerPlayer;
 
-@Mixin(ServerPlayer.class)
+@Mixin(EntityPlayerMP.class)
 public abstract class ServerPlayerMixin implements JadeServerPlayer {
 
 	@Unique

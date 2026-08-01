@@ -4,43 +4,40 @@ import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamDecoder;
-import net.minecraft.network.codec.StreamEncoder;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.HitResult;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTBase;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.world.World;
+import net.minecraft.util.math.RayTraceResult;
 
 /**
  * Describes the current Jade target and its surrounding context.
  *
  * @param <T> the hit result type used to identify the target
  */
-public interface Accessor<T extends HitResult> {
+public interface Accessor<T extends RayTraceResult> {
 
 	/**
 	 * Returns the level the target is being queried in.
 	 *
 	 * @return the current level
 	 */
-	Level getLevel();
+	World getLevel();
 
 	/**
 	 * Returns the player currently using Jade.
 	 *
 	 * @return the client or server player
 	 */
-	Player getPlayer();
+	EntityPlayer getPlayer();
 
 	/**
 	 * Returns server-synchronized data for this target.
 	 *
 	 * @return the synchronized tag, never {@code null}
 	 */
-	CompoundTag getServerData();
+	NBTTagCompound getServerData();
 
 	/**
 	 * Replaces the synchronized server data.
@@ -49,17 +46,17 @@ public interface Accessor<T extends HitResult> {
 	 */
 	@SuppressWarnings("DeprecatedIsStillUsed")
 	@Deprecated
-	void setServerData(@Nullable CompoundTag serverData);
+	void setServerData(@Nullable NBTTagCompound serverData);
 
 	/**
-	 * Decodes a value from a tag created with {@link #encodeAsNbt(StreamEncoder, Object)}.
+	 * Decodes a value from a tag created with {@link #encodeAsNbt(DataCodec, Object)}.
 	 *
 	 * @param codec the codec to use
 	 * @param tag the encoded tag
 	 * @param <D> decoded type
 	 * @return the decoded value, or {@link Optional#empty()} if decoding fails
 	 */
-	<D> Optional<D> decodeFromNbt(StreamDecoder<RegistryFriendlyByteBuf, D> codec, Tag tag);
+	<D> Optional<D> decodeFromNbt(DataCodec<D> codec, NBTBase tag);
 
 	/**
 	 * Encodes a value into a tag suitable for server-data transport.
@@ -69,7 +66,7 @@ public interface Accessor<T extends HitResult> {
 	 * @param <D> encoded type
 	 * @return the encoded tag
 	 */
-	<D> Tag encodeAsNbt(StreamEncoder<RegistryFriendlyByteBuf, D> codec, D value);
+	<D> NBTBase encodeAsNbt(DataCodec<D> codec, D value);
 
 	/**
 	 * Returns the underlying hit result.
@@ -120,7 +117,7 @@ public interface Accessor<T extends HitResult> {
 	 * @param data the data to verify
 	 * @return {@code true} if the data matches this accessor
 	 */
-	boolean verifyData(CompoundTag data);
+	boolean verifyData(NBTTagCompound data);
 
 	/**
 	 * Returns whether the accessor requires verification.

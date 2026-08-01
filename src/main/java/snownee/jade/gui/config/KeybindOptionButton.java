@@ -4,39 +4,43 @@ import java.util.Objects;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.KeyMapping;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.settings.KeyBinding;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextFormatting;
 
 public class KeybindOptionButton extends OptionButton {
 
-	private final KeyMapping keybind;
+	private final KeyBinding keybind;
 
-	public KeybindOptionButton(OptionsList owner, KeyMapping keybind) {
-		super(Component.translatable(keybind.getName()), (Button) null);
+	public KeybindOptionButton(OptionsList owner, KeyBinding keybind) {
+		super(new TextComponentString(keybind.getDisplayName()), (GuiButton) null);
 		this.keybind = keybind;
-		var button = Button.builder(
-				keybind.getTranslatedKeyMessage(), b -> {
-					owner.selectedKey = this.keybind;
+		GuiButton button = new GuiButton(0, 0, 0, 100, 20, keybind.getDisplayName()) {
+			@Override
+			public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+				if (super.mousePressed(mc, mouseX, mouseY)) {
+					owner.selectedKey = KeybindOptionButton.this.keybind;
 					owner.resetMappingAndUpdateButtons();
-				}).size(100, 20).createNarration(supplier -> {
-			if (this.keybind.isUnbound()) {
-				return Component.translatable("narrator.controls.unbound", title());
+					return true;
+				}
+				return false;
 			}
-			return Component.translatable("narrator.controls.bound", title(), supplier.get());
-		}).build();
-		addWidget(button, 0);
+		};
+		addWidget(new JadeWidget.Button(button), 0);
 	}
 
-	public void refresh(@Nullable KeyMapping selectedKey) {
-		var button = Objects.requireNonNull(mainWidget());
+	public void refresh(@Nullable KeyBinding selectedKey) {
+		JadeWidget widget = Objects.requireNonNull(mainWidget());
 		if (selectedKey == keybind) {
-			button.setMessage(Component.literal("> ").append(button.getMessage()
-					.copy()
-					.withStyle(ChatFormatting.WHITE, ChatFormatting.UNDERLINE)).append(" <").withStyle(ChatFormatting.YELLOW));
+			widget.setMessage(new TextComponentString("> ")
+					.appendSibling(widget.getMessage().createCopy().setStyle(new Style().setColor(TextFormatting.WHITE).setUnderlined(true)))
+					.appendSibling(new TextComponentString(" <")).setStyle(new Style().setColor(TextFormatting.YELLOW)));
 		} else {
-			button.setMessage(keybind.getTranslatedKeyMessage());
+			widget.setMessage(new TextComponentString(keybind.getDisplayName()));
 		}
 	}
 }

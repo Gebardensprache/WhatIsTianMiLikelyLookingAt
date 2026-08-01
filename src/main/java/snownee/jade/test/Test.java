@@ -1,34 +1,30 @@
-/*package snownee.jade.test;
+package snownee.jade.test;
 
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.block.Block;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
 import net.minecraftforge.event.RegistryEvent.Register;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
-import net.minecraftforge.fml.common.Mod.EventBusSubscriber.Bus;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.registry.GameRegistry;
 
-@EventBusSubscriber(bus = Bus.MOD)
+@EventBusSubscriber(modid = "jade")
 public class Test {
 
 	public static TestBlock BLOCK;
-	public static BlockEntityType<TestBlockEntity> TILE;
 
 	@SubscribeEvent
 	public static void registerBlocks(Register<Block> event) {
 		event.getRegistry().register((BLOCK = new TestBlock()).setRegistryName("test"));
+		// 1.12.2: there is no tile-entity registry event; tile entities are keyed by class
+		// via GameRegistry, so the modern registerTileTypes handler is folded into block
+		// registration. The "test" key mirrors the modern block entity type registration.
+		GameRegistry.registerTileEntity(TestBlockEntity.class, "test");
 	}
 
 	@SubscribeEvent
 	public static void registerItems(Register<Item> event) {
-		event.getRegistry().register(new BlockItem(BLOCK, new Item.Properties()).setRegistryName("test"));
-	}
-
-	@SubscribeEvent
-	public static void registerTileTypes(Register<BlockEntityType<?>> event) {
-		event.getRegistry().register((TILE = BlockEntityType.Builder.of(TestBlockEntity::new, BLOCK).build(null)).setRegistryName("test"));
+		event.getRegistry().register(new ItemBlock(BLOCK).setRegistryName("test"));
 	}
 
 }
-*/

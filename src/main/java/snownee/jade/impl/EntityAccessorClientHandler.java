@@ -5,11 +5,11 @@ import java.util.function.Function;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.SpawnEggItem;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.ItemMonsterPlacer;
 import snownee.jade.api.AccessorClientHandler;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IJadeProvider;
@@ -35,7 +35,7 @@ public class EntityAccessorClientHandler implements AccessorClientHandler<Entity
 		if (!general.getDisplayBosses() && CommonProxy.isBoss(accessor.getEntity())) {
 			return false;
 		}
-		if (accessor.getEntity() instanceof ItemEntity itemEntity && itemEntity.getItem().isEmpty()) {
+		if (accessor.getEntity() instanceof EntityItem itemEntity && itemEntity.getItem().isEmpty()) {
 			return false;
 		}
 		return true;
@@ -67,11 +67,11 @@ public class EntityAccessorClientHandler implements AccessorClientHandler<Entity
 	public @Nullable Element getIcon(EntityAccessor accessor) {
 		Element icon = null;
 		Entity entity = accessor.getEntity();
-		if (entity instanceof ItemEntity) {
-			icon = JadeUI.item(((ItemEntity) entity).getItem());
+		if (entity instanceof EntityItem) {
+			icon = JadeUI.item(((EntityItem) entity).getItem());
 		} else {
 			ItemStack stack = accessor.getPickedResult();
-			if (!stack.isEmpty() && (!(stack.getItem() instanceof SpawnEggItem) || !(entity instanceof LivingEntity))) {
+			if (!stack.isEmpty() && (!(stack.getItem() instanceof ItemMonsterPlacer) || !(entity instanceof EntityLivingBase))) {
 				icon = JadeUI.item(stack);
 			}
 		}

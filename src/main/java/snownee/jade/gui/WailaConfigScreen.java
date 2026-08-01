@@ -1,34 +1,37 @@
 package snownee.jade.gui;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
 import it.unimi.dsi.fastutil.floats.FloatUnaryOperator;
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.CycleButton;
-import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.ConfirmScreen;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.util.Mth;
-import net.minecraft.util.Util;
+import net.minecraft.client.audio.PositionedSoundRecord;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.GuiYesNo;
+import net.minecraft.client.gui.GuiYesNoCallback;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.client.settings.KeyBinding;
+import net.minecraft.init.SoundEvents;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.TextFormatting;
 import snownee.jade.Jade;
 import snownee.jade.JadeClient;
 import snownee.jade.api.JadeKeys;
 import snownee.jade.api.config.IWailaConfig;
 import snownee.jade.api.theme.IThemeHelper;
 import snownee.jade.api.theme.Theme;
+import snownee.jade.gui.config.JadeWidget;
 import snownee.jade.gui.config.OptionButton;
 import snownee.jade.gui.config.OptionsList;
 import snownee.jade.gui.config.value.CycleOptionValue;
@@ -41,18 +44,19 @@ import snownee.jade.util.ModIdentification;
 
 public class WailaConfigScreen extends PreviewOptionsScreen {
 
-	private @Nullable CycleOptionValue<Identifier> styleEntry;
+	private @Nullable CycleOptionValue<ResourceLocation> styleEntry;
 	private @Nullable OptionValue<Float> opacityEntry;
 
-	public WailaConfigScreen(@Nullable Screen parent) {
-		super(parent, Component.translatable("gui.jade.jade_settings"));
+	public WailaConfigScreen(@Nullable GuiScreen parent) {
+		super(parent, new TextComponentTranslation("gui.jade.jade_settings"));
 		saver = () -> {
 			IWailaConfig.get().save();
 			JadeClient.refreshKeyState();
-			KeyMapping.resetMapping();
-			Minecraft.getInstance().options.save();
+			KeyBinding.resetKeyBindingArrayAndHash();
+			mc.gameSettings.saveOptions();
 		};
-		Runnable runnable = JadeClient.recoverKeysAction($ -> JadeKeys.openConfig().getCategory().equals($.getCategory()));
+		Predicate<KeyBinding> predicate = $ -> JadeKeys.openConfig().getKeyCategory().equals($.getKeyCategory());
+		Runnable runnable = JadeClient.recoverKeysAction(predicate);
 		canceller = () -> {
 			IWailaConfig.get().invalidate();
 			runnable.run();
@@ -62,23 +66,35 @@ public class WailaConfigScreen extends PreviewOptionsScreen {
 	@SuppressWarnings("UnusedReturnValue")
 	public static OptionsList.Entry editIgnoreList(OptionsList.Entry entry, String fileName, Runnable defaultFactory) {
 		Objects.requireNonNull(entry.mainWidget()).setWidth(79);
-		MutableComponent tooltip = Component.translatable("config.jade.edit_ignore_list");
-		entry.addWidget(
-				Button.builder(
-						Component.literal("☰"), b -> {
-							new Thread(() -> {
-								try {
-									Thread.sleep(500);
-								} catch (InterruptedException ignored) {
-								}
-								JadeClient.pleaseWait();
-							}).start();
-							File file = new File(CommonProxy.getConfigDirectory(), "jade/%s.json".formatted(fileName));
-							if (!file.exists()) {
-								defaultFactory.run();
-							}
-							Util.getPlatform().openFile(file);
-						}).size(20, 20).tooltip(Tooltip.create(tooltip)).createNarration($ -> tooltip).build(), 80);
+		GuiButton editButton = new GuiButton(0, 0, 0, 20, 20, "☰") {
+			@Override
+			public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+				if (super.mousePressed(mc, mouseX, mouseY)) {
+					new Thread(() -> {
+						try {
+							Thread.sleep(500);
+						} catch (InterruptedException ignored) {
+						}
+						JadeClient.pleaseWait();
+					}).start();
+					File file = new File(CommonProxy.getConfigDirectory(), String.format("jade/%s.json", fileName));
+					if (!file.exists()) {
+						defaultFactory.run();
+					}
+					try {
+						java.awt.Desktop.getDesktop().open(file);
+					} catch (IOException e) {
+						Jade.LOGGER.error("Failed to open config file %s".formatted(file), e);
+					}
+					return true;
+				}
+				return false;
+			}
+		};
+		// 1.12.2: the "edit ignore list" hint is exposed through the entry description (hover) since there is
+		// no widget-owned tooltip system; the button itself carries the ☰ label.
+		entry.addWidget(new JadeWidget.Button(editButton), 80);
+		entry.addMessage("☰");
 		return entry;
 	}
 
@@ -95,7 +111,7 @@ public class WailaConfigScreen extends PreviewOptionsScreen {
 		options.choices("display_bosses", general::getDisplayBosses, general::setDisplayBosses).parent(entry);
 		entry = options.choices("display_blocks", general::getDisplayBlocks, general::setDisplayBlocks);
 		editIgnoreList(entry, "hide-blocks", () -> WailaClientRegistration.instance().reloadIgnoreLists());
-		options.choices("display_fluids", general::getDisplayFluids, general::setDisplayFluids).parent(entry);
+		options.choices("display_fluids", general::getDisplayFluids, general::setDisplayFluids);
 		options.choices("display_mode", general::getDisplayMode, general::setDisplayMode);
 		OptionValue<?> value = options.choices("item_mod_name", general::showItemModNameTooltip, general::setItemModNameTooltip);
 		List<String> modNames = ClientProxy.metadata.disableItemModNameTooltip().stream()
@@ -103,49 +119,44 @@ public class WailaConfigScreen extends PreviewOptionsScreen {
 				.toList();
 		if (!modNames.isEmpty()) {
 			value.setDisabled(true);
-			value.appendDescription(Component.translatable("gui.jade.disabled_by_mods"));
-			modNames.stream().map(Component::literal).forEach(value::appendDescription);
-			AbstractWidget mainWidget = value.mainWidget();
-			if (mainWidget != null) {
-				mainWidget.setTooltip(MultilineTooltip.create(value.getDescription()));
-			}
+			value.appendDescription(new TextComponentTranslation("gui.jade.disabled_by_mods"));
+			modNames.stream().map(TextComponentString::new).forEach(value::appendDescription);
+			// 1.12.2: the multi-line description is rendered by the owning screen's hover machinery (the entry
+			// description list), so there is no widget-owned Tooltip to attach.
 		}
 
 		options.choices("hide_from_guis", general::shouldHideFromGUIs, general::setHideFromGUIs);
 		options.choices("boss_bar_overlap", general::getBossBarOverlapMode, general::setBossBarOverlapMode);
-		options.slider("reach_distance", general::getExtendedReach, general::setExtendedReach, 0, 20, f -> Mth.floor(f * 2) / 2F);
+		options.slider("reach_distance", general::getExtendedReach, general::setExtendedReach, 0, 20, f -> MathHelper.floor(f * 2) / 2F);
 		options.choices("perspective_mode", general::getPerspectiveMode, general::setPerspectiveMode);
 
 		IWailaConfig.Overlay overlay = IWailaConfig.get().overlay();
 		options.title("overlay");
-		Component adjust = Component.translatable(OptionsList.Entry.makeKey("overlay_pos.adjust"));
+		ITextComponent adjust = new TextComponentTranslation(OptionsList.Entry.makeKey("overlay_pos.adjust"));
 		options.add(new OptionButton(
-				Component.translatable(OptionsList.Entry.makeKey("overlay_pos")),
-				Button.builder(adjust, w -> startAdjustingPosition()).size(100, 20)));
-		CycleButton.ValueListSupplier<Identifier> valuesSupplier = new CycleButton.ValueListSupplier<>() {
-			@Override
-			public List<Identifier> getSelectedList() {
-				return getDefaultList();
-			}
-
-			@Override
-			public List<Identifier> getDefaultList() {
-				Identifier mainId = overlay.getTheme().mainId();
-				return IThemeHelper.get().getThemes().stream()
-						.filter($ -> $.mainId().equals(mainId))
-						.map(Theme::fullId)
-						.toList();
-			}
-		};
-		var themeEntry = options.add(new CycleOptionValue<>(
+				new TextComponentTranslation(OptionsList.Entry.makeKey("overlay_pos")),
+				new GuiButton(0, 0, 0, 100, 20, adjust.getFormattedText()) {
+					@Override
+					public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+						if (super.mousePressed(mc, mouseX, mouseY)) {
+							startAdjustingPosition();
+							return true;
+						}
+						return false;
+					}
+				}));
+		// theme list supplier: all themes sharing the current main id, re-read on every
+		// update so applyTheme can change the available style list (1.12.2: no
+		// CycleButton.ValueListSupplier, so the modern supplier is emulated here)
+		OptionValue<ResourceLocation> themeEntry = options.add(new CycleOptionValue<>(
 				"overlay_theme",
-				CycleButton.builder(
-								id -> Component.translatable(Util.makeDescriptionId("jade.theme", id)),
-								overlay.getTheme().mainId())
-						.withValues(IThemeHelper.get().getThemes().stream()
+				new CycleOptionValue.Builder<>(
+						id -> new TextComponentTranslation("jade.theme." + id.getNamespace() + "." + id.getPath()),
+						IThemeHelper.get().getThemes().stream()
 								.filter($ -> $.styleId().isEmpty())
 								.map(Theme::fullId)
-								.toList()),
+								.toList(),
+						overlay.getTheme().mainId()),
 				() -> overlay.getTheme().mainId(),
 				id -> {
 					if (Objects.equals(id, overlay.getTheme().mainId())) {
@@ -161,20 +172,27 @@ public class WailaConfigScreen extends PreviewOptionsScreen {
 					}
 					Objects.requireNonNull(styleEntry).updateValue();
 				}));
+		CycleOptionValue.Builder<ResourceLocation> styleBuilder = new CycleOptionValue.Builder<>(
+				id -> new TextComponentTranslation(ThemeHelper.INSTANCE.getTheme(id).styleName),
+				null,
+				overlay.getTheme().fullId());
 		styleEntry = options.add(new CycleOptionValue<>(
 				"theme_style",
-				CycleButton.builder(id -> Component.translatable(ThemeHelper.INSTANCE.getTheme(id).styleName), overlay.getTheme().fullId())
-						.withValues(valuesSupplier),
+				styleBuilder,
 				() -> Objects.requireNonNull(overlay.getTheme().id),
 				overlay::applyTheme) {
 			@Override
 			public void updateValue() {
+				styleBuilder.values = IThemeHelper.get().getThemes().stream()
+						.filter($ -> $.mainId().equals(overlay.getTheme().mainId()))
+						.map(Theme::fullId)
+						.toList();
 				super.updateValue();
-				if (valuesSupplier.getDefaultList().size() > 1) {
-					button.active = true;
+				if (styleBuilder.values.size() > 1) {
+					button.setActive(true);
 				} else {
-					button.active = false;
-					button.setMessage(Component.translatable("jade.unavailable"));
+					button.setActive(false);
+					button.setMessage(new TextComponentTranslation("jade.unavailable"));
 				}
 			}
 		});
@@ -211,46 +229,63 @@ public class WailaConfigScreen extends PreviewOptionsScreen {
 		options.choices("flip_main_hand", accessibility::getFlipMainHand, accessibility::setFlipMainHand);
 
 		OptionsList.Title dangerZone = options.title("danger_zone");
-		dangerZone.setTitle(dangerZone.title().copy().withStyle(ChatFormatting.RED));
+		dangerZone.setTitle(dangerZone.title().createCopy().setStyle(new Style().setColor(TextFormatting.RED)));
 		options.add(new OptionButton(
-				"reload_plugins", Button.builder(
-				OptionsList.Entry.makeTitle("reload_plugins.button"), w -> {
-					w.active = false;
-					Jade.loadPlugins();
-					w.active = true;
-					Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.PLAYER_LEVELUP, 1.0f));
-				}).size(100, 20).build()));
-		Component reset = Component.translatable("controls.reset").withStyle(ChatFormatting.RED);
-		Component title = Component.translatable(OptionsList.Entry.makeKey("reset_settings")).withStyle(ChatFormatting.RED);
+				"reload_plugins", new GuiButton(0, 0, 0, 100, 20, OptionsList.Entry.makeTitle("reload_plugins.button").getFormattedText()) {
+					@Override
+					public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+						if (super.mousePressed(mc, mouseX, mouseY)) {
+							enabled = false;
+							Jade.loadPlugins();
+							enabled = true;
+							mc.getSoundHandler().playSound(PositionedSoundRecord.getMasterRecord(
+									SoundEvents.ENTITY_PLAYER_LEVELUP, 1.0f));
+							return true;
+						}
+						return false;
+					}
+				}));
+		ITextComponent reset = new TextComponentTranslation("controls.reset").setStyle(new Style().setColor(TextFormatting.RED));
+		ITextComponent title = new TextComponentTranslation(OptionsList.Entry.makeKey("reset_settings")).setStyle(new Style().setColor(TextFormatting.RED));
+		GuiYesNoCallback callback = new GuiYesNoCallback() {
+			@Override
+			public void confirmClicked(boolean bl, int id) {
+				if (bl) {
+					for (KeyBinding keyMapping : mc.gameSettings.keyBindings) {
+						if (JadeKeys.openConfig().getKeyCategory().equals(keyMapping.getKeyCategory())) {
+							keyMapping.setToDefault();
+						}
+					}
+					mc.gameSettings.saveOptions();
+					try {
+						Jade.resetConfig();
+						initGui();
+					} catch (Throwable e) {
+						Jade.LOGGER.error("", e);
+					}
+				}
+				mc.displayGuiScreen(WailaConfigScreen.this);
+				options().setScrollAmount(options().getMaxScroll());
+			}
+		};
 		options.add(new OptionButton(
-				title, Button.builder(
-				reset, w -> {
-					minecraft.gui.setScreen(new ConfirmScreen(
-							bl -> {
-								if (bl) {
-									for (KeyMapping keyMapping : minecraft.options.keyMappings) {
-										if (JadeKeys.openConfig().getCategory().equals(keyMapping.getCategory())) {
-											keyMapping.setKey(keyMapping.getDefaultKey());
-										}
-									}
-									minecraft.options.save();
-									try {
-										Jade.resetConfig();
-										rebuildWidgets();
-									} catch (Throwable e) {
-										Jade.LOGGER.error("", e);
-									}
-								}
-								minecraft.gui.setScreen(this);
-								options().setScrollAmount(options().maxScrollAmount());
-							},
-							title,
-							Component.translatable(OptionsList.Entry.makeKey("reset_settings.confirm")),
-							reset,
-							Component.translatable("gui.cancel")));
-				}).size(100, 20)));
+				title, new GuiButton(0, 0, 0, 100, 20, reset.getFormattedText()) {
+					@Override
+					public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+						if (super.mousePressed(mc, mouseX, mouseY)) {
+							mc.displayGuiScreen(new GuiYesNo(
+									callback,
+									title.getFormattedText(),
+									new TextComponentTranslation(OptionsList.Entry.makeKey("reset_settings.confirm")).getFormattedText(),
+									reset.getFormattedText(),
+									I18n.format("gui.cancel"),
+									0));
+							return true;
+						}
+						return false;
+					}
+				}));
 
 		return options;
 	}
-
 }

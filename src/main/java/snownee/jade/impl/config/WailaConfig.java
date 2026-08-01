@@ -2,21 +2,30 @@ package snownee.jade.impl.config;
 
 import org.jspecify.annotations.Nullable;
 
+import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 
-import net.minecraft.ChatFormatting;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraft.util.text.Style;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.Mth;
-import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.EnumTypeAdapterFactory;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.EnumHandSide;
 import snownee.jade.Jade;
 import snownee.jade.JadeClient;
 import snownee.jade.api.JadeIds;
+import snownee.jade.api.StringRepresentable;
 import snownee.jade.api.config.IWailaConfig;
 import snownee.jade.api.theme.IThemeHelper;
 import snownee.jade.api.theme.Theme;
@@ -194,22 +203,22 @@ public class WailaConfig implements IWailaConfig {
 				Codec.BOOL.fieldOf("displayBlocks").orElse(true).forGetter(General::getDisplayBlocks),
 				Codec.BOOL.fieldOf("displayEntities").orElse(true).forGetter(General::getDisplayEntities),
 				Codec.BOOL.fieldOf("displayBosses").orElse(true).forGetter(General::getDisplayBosses),
-				StringRepresentable.fromEnum(DisplayMode::values)
+				StringRepresentable.fromEnum(DisplayMode.values())
 						.fieldOf("displayMode")
 						.orElse(DisplayMode.TOGGLE)
 						.forGetter(General::getDisplayMode),
-				StringRepresentable.fromEnum(FluidMode::values)
+				StringRepresentable.fromEnum(FluidMode.values())
 						.fieldOf("fluidMode")
 						.orElse(FluidMode.ANY)
 						.forGetter(General::getDisplayFluids),
-				StringRepresentable.fromEnum(PerspectiveMode::values)
+				StringRepresentable.fromEnum(PerspectiveMode.values())
 						.fieldOf("perspectiveMode")
 						.orElse(PerspectiveMode.CAMERA)
 						.forGetter(General::getPerspectiveMode),
 				Codec.floatRange(0, 20).fieldOf("extendedReach").orElse(0F).forGetter(General::getExtendedReach),
 				Codec.BOOL.fieldOf("debug").orElse(false).forGetter(General::isDebug),
 				Codec.BOOL.fieldOf("itemModNameTooltip").orElse(true).forGetter(General::showItemModNameTooltip),
-				StringRepresentable.fromEnum(BossBarOverlapMode::values)
+				StringRepresentable.fromEnum(BossBarOverlapMode.values())
 						.fieldOf("bossBarOverlapMode")
 						.orElse(BossBarOverlapMode.PUSH_DOWN)
 						.forGetter(General::getBossBarOverlapMode),
@@ -359,7 +368,7 @@ public class WailaConfig implements IWailaConfig {
 
 		@Override
 		public void setExtendedReach(float extendedReach) {
-			this.extendedReach = Mth.clamp(extendedReach, 0, 20);
+			this.extendedReach = MathHelper.clamp(extendedReach, 0, 20);
 		}
 
 		@Override
@@ -446,7 +455,7 @@ public class WailaConfig implements IWailaConfig {
 	public static class Overlay implements IWailaConfig.Overlay {
 
 		public static final Codec<Overlay> CODEC = RecordCodecBuilder.create(i -> i.group(
-						Identifier.CODEC.fieldOf("activeTheme").orElse(JadeIds.DEFAULT_THEME).forGetter($ -> $.activeTheme),
+						JadeCodecs.RESOURCE_LOCATION.fieldOf("activeTheme").orElse(JadeIds.DEFAULT_THEME).forGetter($ -> $.activeTheme),
 						Codec.FLOAT.fieldOf("overlayPosX").orElse(0.5F).forGetter(Overlay::getOverlayPosX),
 						Codec.FLOAT.fieldOf("overlayPosY").orElse(1.0F).forGetter(Overlay::getOverlayPosY),
 						Codec.floatRange(0.2F, 2F).fieldOf("overlayScale").orElse(1.0F).forGetter(Overlay::getOverlayScale),
@@ -454,12 +463,12 @@ public class WailaConfig implements IWailaConfig {
 						Codec.FLOAT.fieldOf("overlayAnchorY").orElse(0.0F).forGetter(Overlay::getAnchorY),
 						Codec.floatRange(0, 1).fieldOf("autoScaleThreshold").orElse(0.4f).forGetter(Overlay::getAutoScaleThreshold),
 						Codec.floatRange(0, 1).fieldOf("alpha").orElse(0.7f).forGetter(Overlay::getAlpha),
-						StringRepresentable.fromEnum(IconMode::values).fieldOf("iconMode").orElse(IconMode.TOP).forGetter(Overlay::getIconMode),
+						StringRepresentable.fromEnum(IconMode.values()).fieldOf("iconMode").orElse(IconMode.TOP).forGetter(Overlay::getIconMode),
 						Codec.BOOL.fieldOf("animation").orElse(true).forGetter(Overlay::getAnimation),
 						Codec.floatRange(0, Float.MAX_VALUE).fieldOf("disappearingDelay").orElse(0F).forGetter(Overlay::getDisappearingDelay))
 				.apply(i, Overlay::new));
 
-		public Identifier activeTheme;
+		public ResourceLocation activeTheme;
 		private float overlayPosX;
 		private float overlayPosY;
 		private float overlayScale;
@@ -473,7 +482,7 @@ public class WailaConfig implements IWailaConfig {
 		private float disappearingDelay;
 
 		public Overlay(
-				Identifier activeTheme,
+				ResourceLocation activeTheme,
 				float overlayPosX,
 				float overlayPosY,
 				float overlayScale,
@@ -499,22 +508,22 @@ public class WailaConfig implements IWailaConfig {
 
 		@Override
 		public float getOverlayPosX() {
-			return Mth.clamp(overlayPosX, 0.0F, 1.0F);
+			return MathHelper.clamp(overlayPosX, 0.0F, 1.0F);
 		}
 
 		@Override
 		public void setOverlayPosX(float overlayPosX) {
-			this.overlayPosX = Mth.clamp(overlayPosX, 0.0F, 1.0F);
+			this.overlayPosX = MathHelper.clamp(overlayPosX, 0.0F, 1.0F);
 		}
 
 		@Override
 		public float getOverlayPosY() {
-			return Mth.clamp(overlayPosY, 0.0F, 1.0F);
+			return MathHelper.clamp(overlayPosY, 0.0F, 1.0F);
 		}
 
 		@Override
 		public void setOverlayPosY(float overlayPosY) {
-			this.overlayPosY = Mth.clamp(overlayPosY, 0.0F, 1.0F);
+			this.overlayPosY = MathHelper.clamp(overlayPosY, 0.0F, 1.0F);
 		}
 
 		@Override
@@ -524,27 +533,27 @@ public class WailaConfig implements IWailaConfig {
 
 		@Override
 		public void setOverlayScale(float overlayScale) {
-			this.overlayScale = Mth.clamp(overlayScale, 0.2F, 2.0F);
+			this.overlayScale = MathHelper.clamp(overlayScale, 0.2F, 2.0F);
 		}
 
 		@Override
 		public float getAnchorX() {
-			return Mth.clamp(overlayAnchorX, 0.0F, 1.0F);
+			return MathHelper.clamp(overlayAnchorX, 0.0F, 1.0F);
 		}
 
 		@Override
 		public void setAnchorX(float overlayAnchorX) {
-			this.overlayAnchorX = Mth.clamp(overlayAnchorX, 0.0F, 1.0F);
+			this.overlayAnchorX = MathHelper.clamp(overlayAnchorX, 0.0F, 1.0F);
 		}
 
 		@Override
 		public float getAnchorY() {
-			return Mth.clamp(overlayAnchorY, 0.0F, 1.0F);
+			return MathHelper.clamp(overlayAnchorY, 0.0F, 1.0F);
 		}
 
 		@Override
 		public void setAnchorY(float overlayAnchorY) {
-			this.overlayAnchorY = Mth.clamp(overlayAnchorY, 0.0F, 1.0F);
+			this.overlayAnchorY = MathHelper.clamp(overlayAnchorY, 0.0F, 1.0F);
 		}
 
 		@Override
@@ -559,7 +568,7 @@ public class WailaConfig implements IWailaConfig {
 
 		@Override
 		public void setAlpha(float alpha) {
-			this.alpha = Mth.clamp(alpha, 0, 1);
+			this.alpha = MathHelper.clamp(alpha, 0, 1);
 		}
 
 		@Override
@@ -571,7 +580,7 @@ public class WailaConfig implements IWailaConfig {
 		}
 
 		@Override
-		public void applyTheme(Identifier id) {
+		public void applyTheme(ResourceLocation id) {
 			try {
 				activeThemeInstance = IThemeHelper.get().getTheme(id);
 			} catch (Exception e) {
@@ -621,9 +630,55 @@ public class WailaConfig implements IWailaConfig {
 
 	public static class Formatting implements IWailaConfig.Formatting {
 
-		public static final Codec<Formatting> CODEC = RecordCodecBuilder.create(i -> i.group(Style.Serializer.CODEC.fieldOf(
+		/**
+		 * 1.12.2: modern Jade uses {@code Style.Serializer.CODEC}. The vanilla chat style
+		 * serializer is that same format, so build a {@link Codec} over {@link JsonOps}
+		 * with a Gson configured exactly like {@code ITextComponent.Serializer}'s (that
+		 * Gson is private). The old one-name codec wrote a bare color string
+		 * ({@code "blue"}); that legacy form is still accepted so existing configs do not
+		 * reset, and a subsequent save rewrites it as the full style object.
+		 */
+		private static final Gson STYLE_GSON = new GsonBuilder()
+				.registerTypeHierarchyAdapter(ITextComponent.class, new ITextComponent.Serializer())
+				.registerTypeHierarchyAdapter(Style.class, new Style.Serializer())
+				.registerTypeAdapterFactory(new EnumTypeAdapterFactory())
+				.create();
+
+		private static final Codec<Style> STYLE_CODEC = new Codec<>() {
+			@Override
+			public <T> DataResult<Pair<Style, T>> decode(DynamicOps<T> ops, T input) {
+				if (input instanceof JsonElement element) {
+					try {
+						Style style = STYLE_GSON.fromJson(element, Style.class);
+						if (style != null) {
+							return DataResult.success(Pair.of(style, ops.empty()));
+						}
+					} catch (Exception ignored) {
+					}
+					// Legacy one-name format, e.g. "blue".
+					if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+						TextFormatting tf = TextFormatting.getValueByName(element.getAsString());
+						if (tf != null && tf.isColor()) {
+							return DataResult.success(Pair.of(new Style().setColor(tf), ops.empty()));
+						}
+					}
+				}
+				return DataResult.error(() -> "Invalid text formatting: " + input);
+			}
+
+			@Override
+			@SuppressWarnings("unchecked")
+			public <T> DataResult<T> encode(Style style, DynamicOps<T> ops, T prefix) {
+				if (!(ops instanceof JsonOps)) {
+					return DataResult.error(() -> "Style codec requires JsonOps");
+				}
+				return DataResult.success((T) STYLE_GSON.toJsonTree(style));
+			}
+		};
+
+		public static final Codec<Formatting> CODEC = RecordCodecBuilder.create(i -> i.group(STYLE_CODEC.fieldOf(
 						"itemModNameStyle")
-				.orElseGet(() -> Style.EMPTY.applyFormats(ChatFormatting.BLUE, ChatFormatting.ITALIC))
+				.orElseGet(() -> new Style().setColor(TextFormatting.BLUE).setItalic(true))
 				.forGetter(Formatting::getItemModNameStyle)).apply(i, Formatting::new));
 
 		private Style itemModNameStyle;
@@ -643,10 +698,10 @@ public class WailaConfig implements IWailaConfig {
 		}
 
 		@Override
-		public Component registryName(String name) {
-			return Component.literal(name).withStyle(IThemeHelper.get().isLightColorScheme() ?
-					ChatFormatting.DARK_GRAY :
-					ChatFormatting.GRAY);
+		public ITextComponent registryName(String name) {
+			return new TextComponentString(name).setStyle(new Style().setColor(IThemeHelper.get().isLightColorScheme() ?
+					TextFormatting.DARK_GRAY :
+					TextFormatting.GRAY));
 		}
 	}
 
@@ -654,7 +709,7 @@ public class WailaConfig implements IWailaConfig {
 
 		public static final Codec<Accessibility> CODEC = RecordCodecBuilder.create(i -> i.group(
 				Codec.BOOL.fieldOf("enableTextToSpeech").orElse(false).forGetter(Accessibility::shouldEnableTextToSpeech),
-				StringRepresentable.fromEnum(TTSMode::values)
+				StringRepresentable.fromEnum(TTSMode.values())
 						.fieldOf("ttsMode")
 						.orElse(TTSMode.TOGGLE)
 						.forGetter(Accessibility::getTTSMode),
@@ -728,7 +783,7 @@ public class WailaConfig implements IWailaConfig {
 
 		@Override
 		public float tryFlip(float f) {
-			if (flipMainHand && Minecraft.getInstance().options.mainHand().get() == HumanoidArm.LEFT) {
+			if (flipMainHand && Minecraft.getMinecraft().gameSettings.mainHand == EnumHandSide.LEFT) {
 				f = 1 - f;
 			}
 			return f;

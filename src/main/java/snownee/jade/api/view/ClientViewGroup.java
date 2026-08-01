@@ -1,14 +1,16 @@
 package snownee.jade.api.view;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.text.ITextComponent;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.ui.BoxElement;
 import snownee.jade.api.ui.BoxStyle;
@@ -31,7 +33,7 @@ public class ClientViewGroup<T> {
 	 * Optional group title.
 	 */
 	@Nullable
-	public Component title;
+	public ITextComponent title;
 	/**
 	 * Message severity for this group.
 	 */
@@ -44,7 +46,7 @@ public class ClientViewGroup<T> {
 	 * Optional additional group data.
 	 */
 	@Nullable
-	public CompoundTag extraData;
+	public NBTTagCompound extraData;
 
 	/**
 	 * Creates a new client group.
@@ -70,18 +72,20 @@ public class ClientViewGroup<T> {
 			Function<IN, @Nullable OUT> itemFactory,
 			@Nullable BiConsumer<ViewGroup<IN>, ClientViewGroup<OUT>> clientGroupDecorator) {
 		return groups.stream().map($ -> {
-			var group = new ClientViewGroup<>($.views.stream().map(itemFactory).filter(Objects::nonNull).toList());
-			CompoundTag data = $.extraData;
+			ClientViewGroup<OUT> group = new ClientViewGroup<>($.views.stream().map(itemFactory).filter(Objects::nonNull).collect(Collectors.toList()));
+			NBTTagCompound data = $.extraData;
 			if (data != null) {
-				group.boxProgress = data.getFloatOr("Progress", 0F);
-				group.messageType = data.getString("MessageType").map(MessageType::parse).orElse(MessageType.NORMAL);
+				group.boxProgress = data.getFloat("Progress");
+				if (data.hasKey("MessageType")) {
+					group.messageType = MessageType.parse(data.getString("MessageType"));
+				}
 			}
 			if (clientGroupDecorator != null) {
 				clientGroupDecorator.accept($, group);
 			}
 			group.extraData = data;
 			return group;
-		}).toList();
+		}).collect(Collectors.toList());
 	}
 
 	/**

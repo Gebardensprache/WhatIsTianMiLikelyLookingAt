@@ -9,25 +9,24 @@ import org.jspecify.annotations.Nullable;
 
 import com.google.common.base.Suppliers;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.world.World;
+import net.minecraft.block.Block;
+import net.minecraft.init.Blocks;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.util.math.RayTraceResult;
 import snownee.jade.Jade;
 import snownee.jade.api.AccessorImpl;
 import snownee.jade.api.BlockAccessor;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.IServerDataProvider;
 import snownee.jade.network.RequestBlockPacket;
 import snownee.jade.network.ServerPayloadContext;
@@ -37,11 +36,11 @@ import snownee.jade.util.WailaExceptionHandler;
 /**
  * Class to get information of block target and context.
  */
-public class BlockAccessorImpl extends AccessorImpl<BlockHitResult> implements BlockAccessor {
+public class BlockAccessorImpl extends AccessorImpl<RayTraceResult> implements BlockAccessor {
 
-	private final BlockState blockState;
+	private final IBlockState blockState;
 	@Nullable
-	private final Supplier<BlockEntity> blockEntity;
+	private final Supplier<TileEntity> blockEntity;
 
 	private BlockAccessorImpl(Builder builder) {
 		super(
@@ -56,8 +55,8 @@ public class BlockAccessorImpl extends AccessorImpl<BlockHitResult> implements B
 		serversideRep = builder.serversideRep;
 	}
 
-	public static void handleRequest(RequestBlockPacket message, ServerPayloadContext context, Consumer<CompoundTag> responseSender) {
-		ServerPlayer player = context.player();
+	public static void handleRequest(RequestBlockPacket message, ServerPayloadContext context, Consumer<NBTTagCompound> responseSender) {
+		EntityPlayerMP player = context.player();
 		context.execute(() -> {
 			BlockAccessor accessor = message.data().unpack(player);
 			if (accessor == null) {
@@ -65,13 +64,13 @@ public class BlockAccessorImpl extends AccessorImpl<BlockHitResult> implements B
 			}
 
 			BlockPos pos = accessor.getPosition();
-			CompoundTag tag = accessor.getServerData();
-			tag.putInt("x", pos.getX());
-			tag.putInt("y", pos.getY());
-			tag.putInt("z", pos.getZ());
-			tag.putString("BlockId", CommonProxy.getId(accessor.getBlock()).toString());
+			NBTTagCompound tag = accessor.getServerData();
+			tag.setInteger("x", pos.getX());
+			tag.setInteger("y", pos.getY());
+			tag.setInteger("z", pos.getZ());
+			tag.setString("BlockId", CommonProxy.getId(accessor.getBlock()).toString());
 
-			if (!player.level().isLoaded(pos) || Jade.isOutOfReach(player, pos, player.blockInteractionRange())) {
+			if (!player.getEntityWorld().isBlockLoaded(pos) || Jade.isOutOfReach(player, pos, player.getEntityAttribute(EntityPlayer.REACH_DISTANCE).getAttributeValue())) {
 				responseSender.accept(tag);
 				return;
 			}
@@ -99,12 +98,12 @@ public class BlockAccessorImpl extends AccessorImpl<BlockHitResult> implements B
 	}
 
 	@Override
-	public BlockState getBlockState() {
+	public IBlockState getBlockState() {
 		return blockState;
 	}
 
 	@Override
-	public @Nullable BlockEntity getBlockEntity() {
+	public @Nullable TileEntity getBlockEntity() {
 		return blockEntity == null ? null : blockEntity.get();
 	}
 
@@ -114,8 +113,8 @@ public class BlockAccessorImpl extends AccessorImpl<BlockHitResult> implements B
 	}
 
 	@Override
-	public Direction getSide() {
-		return getHitResult().getDirection();
+	public EnumFacing getSide() {
+		return getHitResult().sideHit;
 	}
 
 	@Override
@@ -133,44 +132,44 @@ public class BlockAccessorImpl extends AccessorImpl<BlockHitResult> implements B
 	}
 
 	@Override
-	public boolean verifyData(CompoundTag data) {
+	public boolean verifyData(NBTTagCompound data) {
 		if (!verify) {
 			return true;
 		}
-		int x = data.getIntOr("x", 0);
-		int y = data.getIntOr("y", 0);
-		int z = data.getIntOr("z", 0);
+		int x = data.getInteger("x");
+		int y = data.getInteger("y");
+		int z = data.getInteger("z");
 		BlockPos hitPos = getPosition();
 		return x == hitPos.getX() && y == hitPos.getY() && z == hitPos.getZ();
 	}
 
 	public static class Builder implements BlockAccessor.Builder {
 
-		private @Nullable Level level;
-		private @Nullable Player player;
-		private @Nullable CompoundTag serverData;
+		private @Nullable World level;
+		private @Nullable EntityPlayer player;
+		private @Nullable NBTTagCompound serverData;
 		private boolean connected;
 		private boolean showDetails;
-		private @Nullable BlockHitResult hit;
-		private BlockState blockState = Blocks.AIR.defaultBlockState();
-		private @Nullable Supplier<@Nullable BlockEntity> blockEntity;
+		private @Nullable RayTraceResult hit;
+		private IBlockState blockState = Blocks.AIR.getDefaultState();
+		private @Nullable Supplier<@Nullable TileEntity> blockEntity;
 		private ItemStack serversideRep = ItemStack.EMPTY;
 		private boolean verify;
 
 		@Override
-		public Builder level(Level level) {
+		public Builder level(World level) {
 			this.level = level;
 			return this;
 		}
 
 		@Override
-		public Builder player(Player player) {
+		public Builder player(EntityPlayer player) {
 			this.player = player;
 			return this;
 		}
 
 		@Override
-		public Builder serverData(@Nullable CompoundTag serverData) {
+		public Builder serverData(@Nullable NBTTagCompound serverData) {
 			this.serverData = serverData;
 			return this;
 		}
@@ -188,19 +187,19 @@ public class BlockAccessorImpl extends AccessorImpl<BlockHitResult> implements B
 		}
 
 		@Override
-		public Builder hit(BlockHitResult hit) {
+		public Builder hit(RayTraceResult hit) {
 			this.hit = hit;
 			return this;
 		}
 
 		@Override
-		public Builder blockState(BlockState blockState) {
+		public Builder blockState(IBlockState blockState) {
 			this.blockState = blockState;
 			return this;
 		}
 
 		@Override
-		public Builder blockEntity(@Nullable Supplier<BlockEntity> blockEntity) {
+		public Builder blockEntity(@Nullable Supplier<TileEntity> blockEntity) {
 			this.blockEntity = blockEntity;
 			return this;
 		}
@@ -242,18 +241,44 @@ public class BlockAccessorImpl extends AccessorImpl<BlockHitResult> implements B
 		}
 	}
 
-	public record SyncData(boolean showDetails, BlockHitResult hit, ItemStack serversideRep, CompoundTag data) {
-		public static final StreamCodec<RegistryFriendlyByteBuf, SyncData> STREAM_CODEC = StreamCodec.composite(
-				ByteBufCodecs.BOOL,
-				SyncData::showDetails,
-				StreamCodec.of(FriendlyByteBuf::writeBlockHitResult, FriendlyByteBuf::readBlockHitResult),
-				SyncData::hit,
-				ItemStack.OPTIONAL_STREAM_CODEC,
-				SyncData::serversideRep,
-				ByteBufCodecs.COMPOUND_TAG,
-				SyncData::data,
-				SyncData::new
-		);
+	public record SyncData(boolean showDetails, RayTraceResult hit, ItemStack serversideRep, NBTTagCompound data) {
+		public static final DataCodec<SyncData> STREAM_CODEC = new DataCodec<>() {
+			@Override
+			public SyncData decode(PacketBuffer buf) {
+				boolean showDetails = buf.readBoolean();
+				RayTraceResult hit = readBlockHitResult(buf);
+				ItemStack serversideRep = DataCodec.readStack(buf);
+				NBTTagCompound data = DataCodec.readTag(buf);
+				return new SyncData(showDetails, hit, serversideRep, data);
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, SyncData value) {
+				buf.writeBoolean(value.showDetails);
+				writeBlockHitResult(buf, value.hit);
+				buf.writeItemStack(value.serversideRep);
+				buf.writeCompoundTag(value.data);
+			}
+		};
+
+		public static void writeBlockHitResult(PacketBuffer buf, RayTraceResult hit) {
+			buf.writeBlockPos(hit.getBlockPos());
+			buf.writeByte(hit.sideHit.ordinal());
+			buf.writeDouble(hit.hitVec.x);
+			buf.writeDouble(hit.hitVec.y);
+			buf.writeDouble(hit.hitVec.z);
+		}
+
+		public static RayTraceResult readBlockHitResult(PacketBuffer buf) {
+			BlockPos pos = buf.readBlockPos();
+			EnumFacing side = EnumFacing.values()[(buf.readByte() & 0xFF) % EnumFacing.values().length];
+			double x = buf.readDouble();
+			double y = buf.readDouble();
+			double z = buf.readDouble();
+			// 1.12.2: the 4-arg (Type, Vec3d, EnumFacing, BlockPos) constructor is private;
+			// the 3-arg form implies Type.BLOCK.
+			return new RayTraceResult(new Vec3d(x, y, z), side, pos);
+		}
 
 		public SyncData(BlockAccessor accessor) {
 			this(
@@ -264,14 +289,14 @@ public class BlockAccessorImpl extends AccessorImpl<BlockHitResult> implements B
 		}
 
 		@SuppressWarnings("DataFlowIssue")
-		public @Nullable BlockAccessor unpack(ServerPlayer player) {
-			Supplier<BlockEntity> blockEntity = null;
-			BlockState blockState = player.level().getBlockState(hit.getBlockPos());
-			if (blockState.hasBlockEntity()) {
-				blockEntity = Suppliers.memoize(() -> player.level().getBlockEntity(hit.getBlockPos()));
+		public @Nullable BlockAccessor unpack(EntityPlayerMP player) {
+			Supplier<TileEntity> blockEntity = null;
+			IBlockState blockState = player.getEntityWorld().getBlockState(hit.getBlockPos());
+			if (blockState.getBlock().hasTileEntity(blockState)) {
+				blockEntity = Suppliers.memoize(() -> player.getEntityWorld().getTileEntity(hit.getBlockPos()));
 			}
 			return new Builder()
-					.level(player.level())
+					.level(player.getEntityWorld())
 					.player(player)
 					.showDetails(showDetails)
 					.hit(hit)

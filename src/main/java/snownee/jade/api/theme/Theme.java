@@ -7,12 +7,7 @@ import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.resources.metadata.gui.GuiMetadataSection;
-import net.minecraft.client.resources.metadata.gui.GuiSpriteScaling;
-import net.minecraft.data.AtlasIds;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.JadeIds;
 import snownee.jade.api.config.IWailaConfig;
@@ -25,10 +20,21 @@ import snownee.jade.impl.ui.BoxElementImpl;
 
 /**
  * Complete visual theme description used by Jade's renderer.
+ * <p>
+ * 1.12.2: {@code Identifier} replaced with {@code ResourceLocation};
+ * {@code withPath} replaced with explicit {@code new ResourceLocation} calls;
+ * {@code getPath()} replaced with {@code getPath()};
+ * {@code getNamespace()} replaced with {@code getNamespace()}.
+ * The {@code modifyIcon(@Nullable Element)} method drops the
+ * {@code GuiMetadataSection}/{@code GuiSpriteScaling}/{@code NineSlice}
+ * metadata lookup and the
+ * {@code Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(AtlasIds.GUI)}
+ * call (none of which exist in 1.12.2's sprite system), using
+ * {@code iconSlotInflation} directly as the box padding amount.
  */
 public class Theme {
 
-	public @Nullable Identifier id;
+	public @Nullable ResourceLocation id;
 	public String styleName;
 	public BoxStyle tooltipStyle;
 	public BoxStyle nestedBoxStyle;
@@ -36,12 +42,12 @@ public class Theme {
 	public TextSetting text;
 	public float changeOpacity;
 	public boolean lightColorScheme;
-	public @Nullable Identifier iconSlotSprite;
+	public @Nullable ResourceLocation iconSlotSprite;
 	public int iconSlotInflation;
 	public @Nullable BoxElement iconSlotSpriteCache;
 	public SneakyDetails sneakyDetails;
 	public ColorPalette progressColors;
-	public Map<Identifier, Identifier> spriteMapping;
+	public Map<ResourceLocation, ResourceLocation> spriteMapping;
 
 	@SuppressWarnings("OptionalUsedAsFieldOrParameterType")
 	public Theme(
@@ -52,11 +58,11 @@ public class Theme {
 			TextSetting text,
 			float changeOpacity,
 			boolean lightColorScheme,
-			Optional<Identifier> iconSlotSprite,
+			Optional<ResourceLocation> iconSlotSprite,
 			int iconSlotInflation,
 			SneakyDetails sneakyDetails,
 			ColorPalette progressColors,
-			Map<Identifier, Identifier> spriteMapping) {
+			Map<ResourceLocation, ResourceLocation> spriteMapping) {
 		this.styleName = styleName;
 		this.tooltipStyle = tooltipStyle;
 		this.nestedBoxStyle = nestedBoxStyle;
@@ -71,13 +77,13 @@ public class Theme {
 		this.spriteMapping = spriteMapping;
 	}
 
-	public Identifier fullId() {
+	public ResourceLocation fullId() {
 		return Objects.requireNonNull(id);
 	}
 
-	public Identifier mainId() {
+	public ResourceLocation mainId() {
 		if (Objects.requireNonNull(id).getPath().contains("/")) {
-			return id.withPath(id.getPath().substring(0, id.getPath().indexOf('/')));
+			return new ResourceLocation(id.getNamespace(), id.getPath().substring(0, id.getPath().indexOf('/')));
 		} else {
 			return id;
 		}
@@ -91,7 +97,7 @@ public class Theme {
 		}
 	}
 
-	public Identifier mapSprite(Identifier sprite) {
+	public ResourceLocation mapSprite(ResourceLocation sprite) {
 		return spriteMapping.getOrDefault(sprite, sprite);
 	}
 
@@ -107,20 +113,10 @@ public class Theme {
 
 		if (iconSlotSprite != null) {
 			if (iconSlotSpriteCache == null) {
-				var guiSprites = Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(AtlasIds.GUI);
-				TextureAtlasSprite textureAtlasSprite = guiSprites.getSprite(iconSlotSprite);
-				GuiSpriteScaling scaling = textureAtlasSprite.contents().getAdditionalMetadata(GuiMetadataSection.TYPE)
-						.orElse(GuiMetadataSection.DEFAULT)
-						.scaling();
+				// 1.12.2: no GuiMetadataSection/GuiSpriteScaling/NineSlice system exists.
+				// Padding uses iconSlotInflation directly without sprite-metadata border extraction.
 				int[] padding = new int[4];
 				Arrays.fill(padding, iconSlotInflation);
-				if (scaling instanceof GuiSpriteScaling.NineSlice nineSlice) {
-					GuiSpriteScaling.NineSlice.Border border = nineSlice.border();
-					padding[0] += border.top();
-					padding[1] += border.right();
-					padding[2] += border.bottom();
-					padding[3] += border.left();
-				}
 				iconSlotSpriteCache = new BoxElementImpl(new Tooltip(), BoxStyle.simple(iconSlotSprite, padding));
 			}
 			ITooltip tooltip1 = iconSlotSpriteCache.getTooltip();

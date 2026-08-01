@@ -4,10 +4,10 @@ import java.util.List;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.World;
+import net.minecraft.block.state.IBlockState;
 import snownee.jade.addon.harvest.SimpleToolType;
 import snownee.jade.api.IJadeProvider;
 import snownee.jade.api.callback.CallbackContainer;
@@ -25,7 +25,7 @@ public interface ToolType extends IJadeProvider {
 	 * @param pos block position
 	 * @return the evaluation result
 	 */
-	ToolResult test(BlockState state, Level level, BlockPos pos);
+	ToolResult test(IBlockState state, World level, BlockPos pos);
 
 	/**
 	 * Returns the ordered tiers registered for this tool type.
@@ -57,7 +57,7 @@ public interface ToolType extends IJadeProvider {
 	 * @return the matching tier or {@code null}
 	 */
 	@Nullable
-	default ToolTier tier(Identifier id) {
+	default ToolTier tier(ResourceLocation id) {
 		for (ToolTier tier : tiers()) {
 			if (tier.getUid().equals(id)) {
 				return tier;
@@ -85,7 +85,7 @@ public interface ToolType extends IJadeProvider {
 	 * @param tier tier to insert
 	 * @return {@code true} if the tier was inserted
 	 */
-	default boolean insertTierBefore(Identifier targetTier, ToolTier tier) {
+	default boolean insertTierBefore(ResourceLocation targetTier, ToolTier tier) {
 		List<ToolTier> tiers = tiers();
 		for (int i = 0; i < tiers.size(); i++) {
 			if (tiers.get(i).getUid().equals(targetTier)) {
@@ -104,7 +104,7 @@ public interface ToolType extends IJadeProvider {
 	 * @param tier tier to insert
 	 * @return {@code true} if the tier was inserted
 	 */
-	default boolean insertTierAfter(Identifier targetTier, ToolTier tier) {
+	default boolean insertTierAfter(ResourceLocation targetTier, ToolTier tier) {
 		List<ToolTier> tiers = tiers();
 		for (int i = 0; i < tiers.size(); i++) {
 			if (tiers.get(i).getUid().equals(targetTier)) {
@@ -122,7 +122,7 @@ public interface ToolType extends IJadeProvider {
 	 * @param uid tool type identifier
 	 * @return the tool type
 	 */
-	static ToolType of(Identifier uid) {
+	static ToolType of(ResourceLocation uid) {
 		return SimpleToolType.of(uid);
 	}
 
@@ -133,7 +133,7 @@ public interface ToolType extends IJadeProvider {
 	 * @param skipInstaBreakingBlock whether instant-break blocks should be skipped
 	 * @return the tool type
 	 */
-	static ToolType of(Identifier uid, boolean skipInstaBreakingBlock) {
+	static ToolType of(ResourceLocation uid, boolean skipInstaBreakingBlock) {
 		return SimpleToolType.of(uid, skipInstaBreakingBlock);
 	}
 }

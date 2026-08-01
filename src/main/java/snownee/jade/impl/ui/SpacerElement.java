@@ -4,15 +4,12 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.KeyboardHandler;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Renderable;
-import net.minecraft.client.gui.layouts.LayoutElement;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.network.chat.Component;
+import net.minecraft.util.text.ITextComponent;
 import snownee.jade.JadeInternals;
 import snownee.jade.api.ui.CopyBehavior;
 import snownee.jade.api.ui.Element;
+import snownee.jade.api.ui.LayoutElement;
+import snownee.jade.api.ui.Renderable;
 import snownee.jade.api.ui.ResizeableElement;
 
 public class SpacerElement extends ResizeableElement {
@@ -29,7 +26,7 @@ public class SpacerElement extends ResizeableElement {
 	public SpacerElement wrapped(LayoutElement wrapped) {
 		this.wrapped = wrapped;
 		if (wrapped instanceof Element element) {
-			Component narration = element.cachedNarration();
+			ITextComponent narration = element.cachedNarration();
 			if (narration != null) {
 				narration(narration);
 			} else {
@@ -43,25 +40,25 @@ public class SpacerElement extends ResizeableElement {
 	}
 
 	@Override
-	public @Nullable Component getNarration() {
+	public @Nullable ITextComponent getNarration() {
 		return null;
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+	public void extractRenderState(int mouseX, int mouseY, float partialTicks) {
 		if (wrapped instanceof Renderable renderable) {
-			renderable.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+			renderable.extractRenderState(mouseX, mouseY, partialTicks);
 		}
 	}
 
 	@Override
-	public void renderDebug(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks, RenderDebugContext context) {
-		super.renderDebug(graphics, mouseX, mouseY, partialTicks, context);
+	public void renderDebug(int mouseX, int mouseY, float partialTicks, RenderDebugContext context) {
+		super.renderDebug(mouseX, mouseY, partialTicks, context);
 		if (wrapped instanceof Element element) {
-			element.renderDebug(graphics, mouseX, mouseY, partialTicks, context);
+			element.renderDebug(mouseX, mouseY, partialTicks, context);
 		}
 		if (wrapped != null) {
-			JadeInternals.getDisplayHelper().drawBorder(graphics, getRectangle(), 1, 0x880000FF, true);
+			JadeInternals.getDisplayHelper().drawBorder(getRectangle(), 1, 0x880000FF, true);
 		}
 	}
 
@@ -109,20 +106,15 @@ public class SpacerElement extends ResizeableElement {
 		return wrapped != null && wrapped.getRectangle().containsPoint((int) mouseX, (int) mouseY);
 	}
 
-	@Override
-	public boolean mouseClicked(MouseButtonEvent mouseButtonEvent, boolean bl) {
-		if (mouseButtonEvent.button() == 0 && onClick != null && isMouseOver(mouseButtonEvent.x(), mouseButtonEvent.y())) {
-			//noinspection unchecked
-			return ((Predicate<LayoutElement>) onClick).test(wrapped);
-		}
-		return false;
-	}
+	// 1.12.2: upstream mouseClicked(MouseButtonEvent, boolean) override dropped. Nothing in-scope
+	// dispatches mouse clicks to individual Elements (the only caller of root.mouseClicked is the
+	// parked gui.PinScreen); onClick is retained for API parity but currently unused.
 
 	@Override
-	public boolean copyToClipboard(KeyboardHandler keyboardHandler) {
-		if (wrapped instanceof CopyBehavior behavior && behavior.copyToClipboard(keyboardHandler)) {
+	public boolean copyToClipboard() {
+		if (wrapped instanceof CopyBehavior behavior && behavior.copyToClipboard()) {
 			return true;
 		}
-		return super.copyToClipboard(keyboardHandler);
+		return super.copyToClipboard();
 	}
 }

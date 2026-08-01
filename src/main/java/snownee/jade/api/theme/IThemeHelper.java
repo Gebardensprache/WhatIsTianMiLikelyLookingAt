@@ -4,8 +4,8 @@ import java.util.Collection;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.JadeInternals;
 import snownee.jade.api.ui.TextElement;
 
@@ -51,7 +51,7 @@ public interface IThemeHelper {
 	 * @param id theme identifier
 	 * @return matching theme
 	 */
-	Theme getTheme(Identifier id);
+	Theme getTheme(ResourceLocation id);
 
 	/**
 	 * Returns whether a theme with the given identifier exists.
@@ -59,7 +59,7 @@ public interface IThemeHelper {
 	 * @param id theme identifier
 	 * @return {@code true} if the theme exists
 	 */
-	boolean hasTheme(Identifier id);
+	boolean hasTheme(ResourceLocation id);
 
 	/**
 	 * Styles the given text as informational.
@@ -67,7 +67,7 @@ public interface IThemeHelper {
 	 * @param componentOrString text to style
 	 * @return styled component
 	 */
-	MutableComponent info(Object componentOrString);
+	ITextComponent info(Object componentOrString);
 
 	/**
 	 * Styles the given text as a success message.
@@ -75,7 +75,7 @@ public interface IThemeHelper {
 	 * @param componentOrString text to style
 	 * @return styled component
 	 */
-	MutableComponent success(Object componentOrString);
+	ITextComponent success(Object componentOrString);
 
 	/**
 	 * Styles the given text as a warning.
@@ -83,7 +83,7 @@ public interface IThemeHelper {
 	 * @param componentOrString text to style
 	 * @return styled component
 	 */
-	MutableComponent warning(Object componentOrString);
+	ITextComponent warning(Object componentOrString);
 
 	/**
 	 * Styles the given text as dangerous.
@@ -91,7 +91,7 @@ public interface IThemeHelper {
 	 * @param componentOrString text to style
 	 * @return styled component
 	 */
-	MutableComponent danger(Object componentOrString);
+	ITextComponent danger(Object componentOrString);
 
 	/**
 	 * Styles the given text as a failure message.
@@ -99,7 +99,7 @@ public interface IThemeHelper {
 	 * @param componentOrString text to style
 	 * @return styled component
 	 */
-	MutableComponent failure(Object componentOrString);
+	ITextComponent failure(Object componentOrString);
 
 	/**
 	 * Styles the given text as a title.
@@ -107,7 +107,7 @@ public interface IThemeHelper {
 	 * @param componentOrString text to style
 	 * @return styled component
 	 */
-	MutableComponent title(Object componentOrString);
+	ITextComponent title(Object componentOrString);
 
 	/**
 	 * Styles the given text with the mod name theme.
@@ -115,7 +115,7 @@ public interface IThemeHelper {
 	 * @param componentOrString text to style
 	 * @return styled component
 	 */
-	MutableComponent modName(Object componentOrString);
+	ITextComponent modName(Object componentOrString);
 
 	/**
 	 * Creates a mod-name text element.
@@ -132,7 +132,7 @@ public interface IThemeHelper {
 	 * @param tickRate ticks per second
 	 * @return formatted duration
 	 */
-	default MutableComponent seconds(int ticks, float tickRate) {
+	default ITextComponent seconds(int ticks, float tickRate) {
 		return seconds(ticks, tickRate, false);
 	}
 
@@ -144,7 +144,7 @@ public interface IThemeHelper {
 	 * @param alwaysOnePart whether to always show a single time part
 	 * @return formatted duration
 	 */
-	MutableComponent seconds(int ticks, float tickRate, boolean alwaysOnePart);
+	ITextComponent seconds(int ticks, float tickRate, boolean alwaysOnePart);
 
 	/**
 	 * Returns whether the active theme uses a light color scheme.

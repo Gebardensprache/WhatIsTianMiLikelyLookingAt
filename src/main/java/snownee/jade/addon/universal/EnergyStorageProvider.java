@@ -3,17 +3,17 @@ package snownee.jade.addon.universal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.BlockAccessor;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -36,10 +36,10 @@ import snownee.jade.impl.WailaCommonRegistration;
 import snownee.jade.util.ClientProxy;
 import snownee.jade.util.CommonProxy;
 
-public class EnergyStorageProvider<T extends Accessor<?>> implements StreamServerDataProvider<T, Map.Entry<Identifier, List<ViewGroup<EnergyView.Data>>>> {
+public class EnergyStorageProvider<T extends Accessor<?>> implements StreamServerDataProvider<T, Map.Entry<ResourceLocation, List<ViewGroup<EnergyView.Data>>>> {
 
-	private static final StreamCodec<RegistryFriendlyByteBuf, Map.Entry<Identifier, List<ViewGroup<EnergyView.Data>>>> STREAM_CODEC = ViewGroup.listCodec(
-			EnergyView.Data.STREAM_CODEC).cast();
+	private static final DataCodec<Map.Entry<ResourceLocation, List<ViewGroup<EnergyView.Data>>>> STREAM_CODEC = ViewGroup.listCodec(
+			EnergyView.Data.STREAM_CODEC);
 
 	public static final EnergyStorageProvider<BlockAccessor> BLOCK = new EnergyStorageProvider<>();
 	public static final EnergyStorageProvider<EntityAccessor> ENTITY = new EnergyStorageProvider<>();
@@ -47,15 +47,11 @@ public class EnergyStorageProvider<T extends Accessor<?>> implements StreamServe
 	public static class Client<T extends Accessor<?>> extends EnergyStorageProvider<T> implements IComponentProvider<T> {
 		public static final Client<BlockAccessor> BLOCK = new Client<>();
 		public static final Client<EntityAccessor> ENTITY = new Client<>();
-		private static final Element PROGRESS_OVERLAY = JadeUI.horizontalTiledSprite(
-				RenderPipelines.GUI_TEXTURED,
-				JadeIds.JADE("energy_progress"),
-				16,
-				16);
+		private static final Element PROGRESS_OVERLAY = JadeUI.horizontalTiledSprite(JadeIds.JADE("energy_progress"), 16, 16);
 
 		@Override
 		public void appendTooltip(ITooltip tooltip, T accessor, IPluginConfig config) {
-			if ((!accessor.showDetails() && config.get(JadeIds.UNIVERSAL_ENERGY_STORAGE_DETAILED))) {
+			if (!accessor.showDetails() && config.get(JadeIds.UNIVERSAL_ENERGY_STORAGE_DETAILED)) {
 				return;
 			}
 
@@ -69,59 +65,54 @@ public class EnergyStorageProvider<T extends Accessor<?>> implements StreamServe
 				return;
 			}
 
-			boolean renderGroup = groups.size() > 1 || groups.getFirst().shouldRenderGroup();
-			ClientViewGroup.tooltip(
-					tooltip, groups, renderGroup, (theTooltip, group) -> {
-						if (renderGroup) {
-							group.renderHeader(theTooltip);
+			// 1.12.2: no List#getFirst in the Java 8 collection API.
+			boolean renderGroup = groups.size() > 1 || groups.get(0).shouldRenderGroup();
+			ClientViewGroup.tooltip(tooltip, groups, renderGroup, (theTooltip, group) -> {
+				if (renderGroup) {
+					group.renderHeader(theTooltip);
+				}
+				for (EnergyView view : group.views) {
+					IWailaConfig.HandlerDisplayStyle style = config.getEnum(JadeIds.UNIVERSAL_ENERGY_STORAGE_STYLE);
+					ITextComponent text;
+					if (view.overrideText != null) {
+						text = view.overrideText;
+					} else {
+						String current = view.current;
+						if (style == IWailaConfig.HandlerDisplayStyle.PROGRESS_BAR) {
+							current = "§f" + current;
 						}
-						for (var view : group.views) {
-							IWailaConfig.HandlerDisplayStyle style = config.getEnum(JadeIds.UNIVERSAL_ENERGY_STORAGE_STYLE);
-							Component text;
-							if (view.overrideText != null) {
-								text = view.overrideText;
-							} else {
-								String current = view.current;
-								if (style == IWailaConfig.HandlerDisplayStyle.PROGRESS_BAR) {
-									current = ChatFormatting.WHITE + current;
-								}
-								text = Component.translatable("jade.fe", current, view.max);
-							}
+						text = new TextComponentTranslation("jade.fe", current, view.max);
+					}
 
-							switch (style) {
-								case PLAIN_TEXT -> theTooltip.add(Component.translatable("jade.energy.text", text));
-								case ICON -> {
-									theTooltip.add(JadeUI.sprite(JadeIds.JADE("energy"), 10, 10)
-											.size(10, 9)
-											.offset(0, -1));
-									theTooltip.append(text);
-								}
-								case PROGRESS_BAR -> {
-									ProgressView progressView = new ProgressView(
-											ProgressView.Part.of(view.ratio, PROGRESS_OVERLAY),
-											text,
-											JadeUI.progressStyle(),
-											BoxStyle.nestedBox());
-									theTooltip.add(JadeUI.progress(progressView));
-								}
-							}
+					switch (style) {
+						case PLAIN_TEXT -> theTooltip.add(new TextComponentTranslation("jade.energy.text", text));
+						case ICON -> {
+							theTooltip.add(JadeUI.sprite(JadeIds.JADE("energy"), 10, 10).size(10, 9).offset(0, -1));
+							theTooltip.append(text);
 						}
-					});
+						case PROGRESS_BAR -> {
+							ProgressView progressView = new ProgressView(
+									ProgressView.Part.of(view.ratio, PROGRESS_OVERLAY), text, JadeUI.progressStyle(), BoxStyle.nestedBox());
+							theTooltip.add(JadeUI.progress(progressView));
+						}
+					}
+				}
+			});
 		}
 	}
 
 	@Override
-	public Map.@Nullable Entry<Identifier, List<ViewGroup<EnergyView.Data>>> streamData(T accessor) {
+	public Map.@Nullable Entry<ResourceLocation, List<ViewGroup<EnergyView.Data>>> streamData(T accessor) {
 		return CommonProxy.getServerExtensionData(accessor, WailaCommonRegistration.instance().energyStorageProviders);
 	}
 
 	@Override
-	public StreamCodec<RegistryFriendlyByteBuf, Map.Entry<Identifier, List<ViewGroup<EnergyView.Data>>>> streamCodec() {
+	public DataCodec<Map.Entry<ResourceLocation, List<ViewGroup<EnergyView.Data>>>> streamCodec() {
 		return STREAM_CODEC;
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.UNIVERSAL_ENERGY_STORAGE;
 	}
 
@@ -142,16 +133,17 @@ public class EnergyStorageProvider<T extends Accessor<?>> implements StreamServe
 		public static final Extension INSTANCE = new Extension();
 
 		@Override
-		public Identifier getUid() {
+		public ResourceLocation getUid() {
 			return JadeIds.UNIVERSAL_ENERGY_STORAGE_DEFAULT;
 		}
 
 		@Override
 		public List<ClientViewGroup<EnergyView>> getClientGroups(Accessor<?> accessor, List<ViewGroup<EnergyView.Data>> groups) {
 			return groups.stream().map($ -> {
-				String unit = $.getExtraData().getStringOr("Unit", CommonProxy.defaultEnergyUnit());
-				return new ClientViewGroup<>($.views.stream().map(data -> EnergyView.read(data, unit)).filter(Objects::nonNull).toList());
-			}).toList();
+				String unit = $.getExtraData().hasKey("Unit") ? $.getExtraData().getString("Unit") : CommonProxy.defaultEnergyUnit();
+				return new ClientViewGroup<>($.views.stream().map(data -> EnergyView.read(data, unit)).filter(Objects::nonNull)
+						.collect(Collectors.toList()));
+			}).collect(Collectors.toList());
 		}
 
 		@Nullable
@@ -170,5 +162,4 @@ public class EnergyStorageProvider<T extends Accessor<?>> implements StreamServe
 			return 9999;
 		}
 	}
-
 }

@@ -1,6 +1,6 @@
 package snownee.jade.api;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 
 /**
  * Base contract for every Jade API extension point.
@@ -16,7 +16,7 @@ public interface IJadeProvider {
 	 *
 	 * @return the provider identifier
 	 */
-	Identifier getUid();
+	ResourceLocation getUid();
 
 	/**
 	 * Returns the default tooltip priority for this provider. Unavailable if the registry does not support priorities.

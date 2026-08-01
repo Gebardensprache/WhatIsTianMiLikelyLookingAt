@@ -1,11 +1,11 @@
 package snownee.jade;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
@@ -13,43 +13,71 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
-import com.mojang.logging.LogUtils;
 import com.mojang.serialization.Codec;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.players.NameAndId;
-import net.minecraft.util.ExtraCodecs;
-import net.minecraft.util.Mth;
-import net.minecraft.world.level.gamerules.GameRule;
-import net.minecraft.world.level.gamerules.GameRuleCategory;
-import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.GameRules;
+import net.minecraft.world.WorldServer;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.event.FMLInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLLoadCompleteEvent;
+import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLServerStartedEvent;
+import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import snownee.jade.addon.core.ModNameProvider;
 import snownee.jade.addon.harvest.LootTableMineableCollector;
 import snownee.jade.api.IWailaPlugin;
 import snownee.jade.api.JadeIds;
 import snownee.jade.api.config.IWailaConfig;
+import snownee.jade.command.JadeServerCommand;
 import snownee.jade.impl.WailaClientRegistration;
 import snownee.jade.impl.WailaCommonRegistration;
 import snownee.jade.impl.config.WailaConfig;
 import snownee.jade.test.ExamplePlugin;
+import snownee.jade.util.ClientProxy;
 import snownee.jade.util.CommonProxy;
 import snownee.jade.util.JadeCodecs;
 import snownee.jade.util.JsonConfig;
 
+/**
+ * The Forge 1.12.2 entrypoint of Jade.
+ * <p>
+ * B7 wiring: pre-init captures the {@link ASMDataTable} and hands it to the plugin
+ * discovery machinery, init initializes the physical client, load-complete runs the
+ * plugin reset/retry + finalization sequence directly (FMLLoadCompleteEvent is a marker
+ * event on 1.12.2 and has no {@code enqueueWork}), and the server lifecycle owns the
+ * reach game rule and the tag-refresh signal. The HWYLA/TOP compatibility bridges no
+ * longer live here: they are standalone shim mods whose {@code @WailaPlugin} entrypoints
+ * are discovered by {@link #loadPlugins} just like any other plugin.
+ */
+@Mod(
+		modid = Jade.ID,
+		name = "Jade",
+//		dependencies = "after:*",
+		acceptableRemoteVersions = "*",
+		guiFactory = "snownee.jade.gui.JadeGuiFactory")
 public class Jade {
 	public static final String ID = "jade";
 	public static final String PROTOCOL_VERSION = "9";
-	public static final Logger LOGGER = LogUtils.getLogger();
+	public static final Logger LOGGER = LogManager.getLogger(ID);
 	public static final Set<String> DISABLED_PLUGINS = Sets.newHashSet();
-	private static @Nullable GameRule<Integer> MAX_POSITION_DEVIATION;
+	private static final String MAX_POSITION_DEVIATION = "jade:max_position_deviation";
 	private static final Supplier<JsonConfig<WailaConfig.Root>> rootConfig = Suppliers.memoize(() -> new JsonConfig<>(
 			ID + "/" + ID,
 			WailaConfig.Root.CODEC,
 			WailaConfig::fixData));
 	private static List<JsonConfig<? extends WailaConfig>> configs = List.of();
+
+	/** Retained from {@link FMLServerStartingEvent}; {@link FMLServerStartedEvent} has no server accessor. */
+	private static @Nullable MinecraftServer server;
+	private static boolean tagsListenerRegistered;
+
+	/** Captured during pre-init; required by {@link CommonProxy#loadEntrypoints}. */
+	private static @Nullable ASMDataTable asmData;
 
 	private static JsonConfig<? extends WailaConfig> configHolder() {
 		WailaConfig.Root root = rootConfig();
@@ -93,7 +121,15 @@ public class Jade {
 		return rootConfig.get().get();
 	}
 
-	public static void loadComplete() {
+	/**
+	 * Finalizes registrations and profiles after the plugin loading phase.
+	 * <p>
+	 * Registered exactly once from {@link #onLoadComplete}. The HWYLA/TOP compatibility
+	 * bridges used to sit between the last plugin reset and the priority sort; they now
+	 * register through the standard plugin loader (the shims' {@code @WailaPlugin}
+	 * entrypoints), so this runs directly after {@link #loadPlugins(ASMDataTable)}.
+	 */
+	private static void loadComplete() {
 		if (CommonProxy.isDevEnv()) {
 			try {
 				IWailaPlugin plugin = new ExamplePlugin();
@@ -105,7 +141,7 @@ public class Jade {
 			}
 		}
 
-		Set<Identifier> extraKeys;
+		Set<ResourceLocation> extraKeys;
 		if (CommonProxy.isPhysicallyClient()) {
 			extraKeys = WailaClientRegistration.instance().getConfigKeys();
 		} else {
@@ -113,17 +149,12 @@ public class Jade {
 		}
 		WailaCommonRegistration.instance().priorities.sort(extraKeys);
 		WailaCommonRegistration.instance().loadComplete();
-		CommonProxy.registerTagsUpdatedListener((provider, client) -> {
-			WailaCommonRegistration.instance().reloadOperations(provider);
-			if (!client) {
-				LootTableMineableCollector.onTagsUpdated(provider);
-			}
-		});
+		registerTagsUpdatedListenerOnce();
 		if (CommonProxy.isPhysicallyClient()) {
 			WailaClientRegistration.instance().loadComplete();
 
 			Codec<WailaConfig> codec = WailaConfig.MAP_CODEC.codec();
-			ImmutableList.Builder<JsonConfig<? extends WailaConfig>> list = ImmutableList.builderWithExpectedSize(4);
+			ImmutableList.Builder<JsonConfig<? extends WailaConfig>> list = ImmutableList.builder();
 			list.add(rootConfig.get());
 			Supplier<WailaConfig> defaultFactory = () -> JadeCodecs.createFromEmptyMap(codec);
 			for (int i = 1; i < 4; ++i) {
@@ -139,6 +170,20 @@ public class Jade {
 			}
 			JadeClient.refreshKeyState();
 		}
+	}
+
+	private static void registerTagsUpdatedListenerOnce() {
+		if (tagsListenerRegistered) {
+			return;
+		}
+		tagsListenerRegistered = true;
+		// B5a contract: reload operations; on the server side also refresh loot-table mineability.
+		CommonProxy.registerTagsUpdatedListener((server, client) -> {
+			WailaCommonRegistration.instance().reloadOperations();
+			if (!client) {
+				LootTableMineableCollector.onTagsUpdated(server, false);
+			}
+		});
 	}
 
 	private static Supplier<WailaConfig> getProfilePreset(Supplier<WailaConfig> defaultFactory, int i) {
@@ -189,12 +234,18 @@ public class Jade {
 		dest.invalidate();
 	}
 
-	public static void loadPlugins() {
-		List<CommonProxy.Entrypoint> entrypoints = CommonProxy.loadEntrypoints();
+	/**
+	 * Runs the plugin reset/retry phase. Called from load-complete with the ASM data
+	 * captured during pre-init; kept public for the parked GUI's reload-plugins action.
+	 */
+	public static void loadPlugins(ASMDataTable asmData) {
+		List<CommonProxy.Entrypoint> entrypoints = CommonProxy.loadEntrypoints(asmData);
 		Set<String> disabledClasses = DISABLED_PLUGINS;
 		JsonConfig<List<String>> config = new JsonConfig<>(
 				ID + "/disabled_plugins",
-				ExtraCodecs.NON_EMPTY_STRING.listOf().optionalFieldOf("values", List.of()).codec(),
+				// 1.12.2: ExtraCodecs.NON_EMPTY_STRING does not exist here; plain STRING keeps
+				// the file format (a JSON list of plugin class names) identical to upstream.
+				Codec.STRING.listOf().optionalFieldOf("values", List.of()).codec(),
 				null,
 				List::of);
 		if (config.getFile().exists() && !config.get().isEmpty()) {
@@ -207,6 +258,16 @@ public class Jade {
 			LOGGER.info("Trying to load plugins again without erroneous plugins");
 			loadPlugins(entrypoints, disabledClasses, erroneousClasses, erroneousClasses);
 		}
+	}
+
+	/**
+	 * No-arg {@code loadPlugins()} for the parked GUI's reload-plugins action. Uses the
+	 * ASM data captured during pre-init, re-running the same reset/retry phase as
+	 * {@link #loadPlugins(ASMDataTable)} and re-finalizing registrations (modern
+	 * {@code loadPlugins()} also ends in {@code loadComplete()}).
+	 */
+	public static void loadPlugins() {
+		loadPlugins(asmData);
 		loadComplete();
 	}
 
@@ -228,7 +289,7 @@ public class Jade {
 			String className = entrypoint.className();
 			try {
 				if (disabledClasses.contains(className)) {
-					LOGGER.info("Skipping disabled plugin: %s".formatted(className));
+					LOGGER.info("Skipping disabled plugin: {}", className);
 					continue;
 				}
 				if (excludedClasses.contains(className)) {
@@ -245,7 +306,7 @@ public class Jade {
 					entrypoint.throwError("Duplicate plugin class");
 				}
 				IWailaPlugin plugin = entrypoint.newInstance();
-				LOGGER.info("Start loading plugin from %s: %s".formatted(entrypoint.modName(), className));
+				LOGGER.info("Start loading plugin from {}: {}", entrypoint.modName(), className);
 				if (stopwatch != null) {
 					stopwatch.reset().start();
 				}
@@ -256,10 +317,10 @@ public class Jade {
 					plugin.registerClient(client);
 				}
 				if (stopwatch != null) {
-					LOGGER.info("%s loaded: %s".formatted(className, stopwatch.stop()));
+					LOGGER.info("{} loaded: {}", className, stopwatch.stop());
 				}
 			} catch (Throwable e) {
-				LOGGER.error("Failed to load plugin from %s: %s".formatted(entrypoint.modName(), className), e);
+				LOGGER.error("Failed to load plugin from {}: {}", entrypoint.modName(), className, e);
 				if (CommonProxy.isDevEnv() || entrypoint.modId().equals(ID)) {
 					throw e;
 				}
@@ -268,16 +329,69 @@ public class Jade {
 		}
 	}
 
-	public static void registerGameRules() {
-		MAX_POSITION_DEVIATION = GameRules.registerInteger("jade:max_position_deviation", GameRuleCategory.MISC, 21, 0, 1000);
-	}
-
-	public static boolean isOutOfReach(ServerPlayer player, BlockPos pos, double baseReach) {
-		ServerLevel level = player.level();
-		if (level.getServer().isSingleplayerOwner(new NameAndId(player.getGameProfile()))) {
+	/**
+	 * Returns whether the target position is out of the player's reach.
+	 * <p>
+	 * 1.12.2: singleplayer owner check through the server owner name (no
+	 * {@code NameAndId} equivalent), deviation rule read via {@code GameRules.getInt}.
+	 */
+	public static boolean isOutOfReach(EntityPlayerMP player, BlockPos pos, double baseReach) {
+		MinecraftServer server = player.getServer();
+		if (server != null
+				&& server.isSinglePlayer()
+				&& player.getName().equals(server.getServerOwner())) {
 			return false;
 		}
-		double maxDistance = Mth.square(baseReach + level.getGameRules().get(Objects.requireNonNull(MAX_POSITION_DEVIATION)));
-		return pos.distSqr(player.blockPosition()) > maxDistance;
+
+		WorldServer world = player.getServerWorld();
+		double reach = baseReach
+				+ world.getGameRules().getInt(MAX_POSITION_DEVIATION);
+		return pos.distanceSq(player.getPosition()) > reach * reach;
 	}
+
+	@Mod.EventHandler
+	public void preInit(FMLPreInitializationEvent event) {
+		asmData = event.getAsmData();
+		CommonProxy.preInit(event);
+		CommonProxy.registerNetwork();
+	}
+
+	@Mod.EventHandler
+	public void init(FMLInitializationEvent event) {
+		if (CommonProxy.isPhysicallyClient()) {
+			ClientProxy.init();
+		}
+	}
+
+	@Mod.EventHandler
+	public void onLoadComplete(FMLLoadCompleteEvent event) {
+		// The HWYLA/TOP compat bridges now come through the standard plugin loading: the shims'
+		// @WailaPlugin entrypoints are discovered by loadPlugins(asmData) just like any other plugin.
+		loadPlugins(asmData);
+		loadComplete();
+	}
+
+	@Mod.EventHandler
+	public void onServerStarting(FMLServerStartingEvent event) {
+		server = event.getServer();
+		event.registerServerCommand(new JadeServerCommand());
+	}
+
+	@Mod.EventHandler
+	public void onServerStarted(FMLServerStartedEvent event) {
+		MinecraftServer server = Jade.server;
+		if (server == null) {
+			return;
+		}
+		for (WorldServer world : server.worlds) {
+			if (world != null && !world.getGameRules().hasRule(MAX_POSITION_DEVIATION)) {
+				world.getGameRules().addGameRule(
+						MAX_POSITION_DEVIATION,
+						"21",
+						GameRules.ValueType.NUMERICAL_VALUE);
+			}
+		}
+		CommonProxy.fireTagsUpdated(server, false);
+	}
+
 }

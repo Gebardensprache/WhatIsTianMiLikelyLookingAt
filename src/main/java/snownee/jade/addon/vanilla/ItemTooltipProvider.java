@@ -5,16 +5,14 @@ import java.util.Objects;
 
 import com.google.common.collect.Lists;
 
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.Font;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.TextColor;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.util.ITooltipFlag;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextFormatting;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IEntityComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -30,42 +28,39 @@ public class ItemTooltipProvider implements IEntityComponentProvider {
 
 	@Override
 	public void appendTooltip(ITooltip tooltip, EntityAccessor accessor, IPluginConfig config) {
-		ItemStack stack = ((ItemEntity) accessor.getEntity()).getItem();
-		Item.TooltipContext tooltipContext = Item.TooltipContext.of(accessor.getLevel());
-		List<Component> lines = Lists.newArrayList();
+		ItemStack stack = ((EntityItem) accessor.getEntity()).getItem();
+		// 1.12.2: no Item.TooltipContext, and getTooltip yields already-formatted Strings instead of
+		// Components. Keep those codes for rendering; only the mod-name comparison strips them.
+		List<String> lines = Lists.newArrayList();
 		try {
-			stack.getTooltipLines(tooltipContext, null, TooltipFlag.Default.NORMAL).stream().map(component -> {
-				if (component.getStyle().getColor() != null) {
-					return component.copy().setStyle(component.getStyle().withColor((TextColor) null));
-				}
-				return component;
-			}).forEach(lines::add);
+			lines.addAll(stack.getTooltip(Minecraft.getMinecraft().player, ITooltipFlag.TooltipFlags.NORMAL));
 		} catch (Throwable e) {
-			String namespace = BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace();
+			ResourceLocation id = stack.getItem().getRegistryName();
+			String namespace = id == null ? "minecraft" : id.getNamespace();
 			WailaExceptionHandler.handleErr(TraceableException.create(e, namespace), this, tooltip::add);
 		}
 		if (lines.size() < 2) {
 			return;
 		}
-		lines.removeFirst();
+		lines.remove(0);
 		String modName = ModIdentification.getModName(stack);
-		Font font = DisplayHelper.font();
+		FontRenderer font = DisplayHelper.font().raw();
 		int maxWidth = 250;
-		for (Component text : lines) {
-			if (Objects.equals(ChatFormatting.stripFormatting(text.getString()), modName)) {
+		for (String text : lines) {
+			if (Objects.equals(TextFormatting.getTextWithoutFormattingCodes(text), modName)) {
 				continue;
 			}
-			int width = font.width(text);
+			int width = font.getStringWidth(text);
 			if (width > maxWidth) {
-				tooltip.add(Component.literal(font.substrByWidth(text, maxWidth - 5).getString() + ".."));
+				tooltip.add(new TextComponentString(font.trimStringToWidth(text, maxWidth - 5) + ".."));
 			} else {
-				tooltip.add(text);
+				tooltip.add(new TextComponentString(text));
 			}
 		}
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_ITEM_TOOLTIP;
 	}
 

@@ -2,12 +2,10 @@ package snownee.jade.addon.vanilla;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -21,16 +19,18 @@ public class ItemBERProvider implements IBlockComponentProvider {
 
 	@Override
 	public @Nullable Element getIcon(BlockAccessor accessor, IPluginConfig config, @Nullable Element currentIcon) {
-		BlockEntity blockEntity = accessor.getBlockEntity();
+		TileEntity blockEntity = accessor.getBlockEntity();
 		if (blockEntity != null) {
 			ItemStack itemStack = accessor.getPickedResult();
-			TagValueOutput tagValueOutput = TagValueOutput.createWithContext(
-					ProblemReporter.ScopedCollector.DISCARDING,
-					accessor.getLevel().registryAccess());
-			//noinspection deprecation
-			blockEntity.removeComponentsFromTag(tagValueOutput);
-			BlockItem.setBlockEntityData(itemStack, blockEntity.getType(), tagValueOutput);
-			itemStack.applyComponents(blockEntity.collectComponents());
+			// 1.12.2: no data components, no TagValueOutput/ProblemReporter. The block entity is
+			// serialised straight to NBT and stashed under "BlockEntityTag" -- the tag vanilla's own
+			// item renderers read back -- after dropping the position keys, which are meaningless on
+			// an item and would otherwise make otherwise-identical stacks compare unequal.
+			NBTTagCompound tag = blockEntity.writeToNBT(new NBTTagCompound());
+			tag.removeTag("x");
+			tag.removeTag("y");
+			tag.removeTag("z");
+			itemStack.setTagInfo("BlockEntityTag", tag);
 			return JadeUI.item(itemStack);
 		}
 		return null;
@@ -41,7 +41,7 @@ public class ItemBERProvider implements IBlockComponentProvider {
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_ITEM_BER;
 	}
 

@@ -1,16 +1,17 @@
 package snownee.jade.addon.vanilla;
 
-import java.util.stream.Stream;
+import java.util.Locale;
 
-import org.apache.commons.lang3.StringUtils;
-
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.resources.language.I18n;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.NoteBlock;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
+import net.minecraft.block.Block;
+import net.minecraft.block.material.Material;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.init.Blocks;
+import net.minecraft.tileentity.TileEntityNote;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextFormatting;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -23,35 +24,73 @@ public class NoteBlockProvider implements IBlockComponentProvider {
 	public static final NoteBlockProvider INSTANCE = new NoteBlockProvider();
 
 	private static final String[] PITCH = {"F♯/G♭", "G", "G♯/A♭", "A", "A♯/B♭", "B", "C", "C♯/D♭", "D", "D♯/E♭", "E", "F"};
-	private static final ChatFormatting[] OCTAVE = {ChatFormatting.WHITE, ChatFormatting.YELLOW, ChatFormatting.GOLD};
-	private static final ChatFormatting[] OCTAVE_LIGHT = {ChatFormatting.DARK_PURPLE, ChatFormatting.DARK_BLUE, ChatFormatting.BLUE};
+	private static final TextFormatting[] OCTAVE = {TextFormatting.WHITE, TextFormatting.YELLOW, TextFormatting.GOLD};
+	private static final TextFormatting[] OCTAVE_LIGHT = {TextFormatting.DARK_PURPLE, TextFormatting.DARK_BLUE, TextFormatting.BLUE};
 
 	@Override
 	public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-		BlockState state = accessor.getBlockState();
-		NoteBlockInstrument instrument = state.getValue(NoteBlock.INSTRUMENT);
-		String key = "jade.instrument." + instrument.getSerializedName();
-		String name;
-		if (JadeUI.hasTranslation(key)) {
-			name = I18n.get(key);
-		} else {
-			name = String.join(
-					" ", Stream.of(instrument.getSerializedName().replace('_', ' ').split(" "))
-							.map(StringUtils::capitalize)
-							.toList());
+		// 1.12.2: notes are stored on TileEntityNote rather than a BlockNote state property.
+		if (!(accessor.getBlockEntity() instanceof TileEntityNote)) {
+			return;
 		}
-		if (instrument.isTunable()) {
-			int note = state.getValue(NoteBlock.NOTE);
-			String pitch = PITCH[note % PITCH.length];
-			ChatFormatting octave = (IThemeHelper.get().isLightColorScheme() ? OCTAVE_LIGHT : OCTAVE)[note / PITCH.length];
-			tooltip.add(Component.literal("%s %s".formatted(name, octave + pitch)));
-		} else {
-			tooltip.add(Component.literal(name));
+		int note = MathHelper.clamp(((TileEntityNote) accessor.getBlockEntity()).note, 0, 24);
+		String instrument = getInstrument(accessor);
+		String key = "jade.instrument." + instrument;
+		String name = JadeUI.hasTranslation(key) ? I18n.format(key) : capitalize(instrument);
+		String pitch = PITCH[note % PITCH.length];
+		TextFormatting octave = (IThemeHelper.get().isLightColorScheme() ? OCTAVE_LIGHT : OCTAVE)[note / PITCH.length];
+		tooltip.add(new TextComponentString(name + " " + octave + pitch));
+	}
+
+	private static String getInstrument(BlockAccessor accessor) {
+		IBlockState state = accessor.getLevel().getBlockState(accessor.getPosition().down());
+		Block block = state.getBlock();
+		if (block == Blocks.CLAY) {
+			return "flute";
 		}
+		if (block == Blocks.GOLD_BLOCK) {
+			return "bell";
+		}
+		if (block == Blocks.WOOL) {
+			return "guitar";
+		}
+		if (block == Blocks.PACKED_ICE) {
+			return "chime";
+		}
+		if (block == Blocks.BONE_BLOCK) {
+			return "xylophone";
+		}
+
+		Material material = state.getMaterial();
+		if (material == Material.WOOD) {
+			return "bass";
+		}
+		if (material == Material.ROCK) {
+			return "basedrum";
+		}
+		if (material == Material.GLASS) {
+			return "hat";
+		}
+		if (material == Material.SAND) {
+			return "snare";
+		}
+		return "harp";
+	}
+
+	private static String capitalize(String value) {
+		String[] words = value.replace('_', ' ').split(" ");
+		StringBuilder builder = new StringBuilder(value.length());
+		for (String word : words) {
+			if (builder.length() > 0) {
+				builder.append(' ');
+			}
+			builder.append(word.substring(0, 1).toUpperCase(Locale.ROOT)).append(word.substring(1));
+		}
+		return builder.toString();
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_NOTE_BLOCK;
 	}
 

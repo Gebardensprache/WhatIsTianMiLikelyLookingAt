@@ -1,8 +1,9 @@
 package snownee.jade.addon.universal;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.Block;
+import net.minecraft.block.Block;
+import net.minecraft.entity.Entity;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentTranslation;
 import snownee.jade.api.IWailaClientRegistration;
 import snownee.jade.api.IWailaCommonRegistration;
 import snownee.jade.api.IWailaPlugin;
@@ -66,7 +67,7 @@ public class UniversalPlugin implements IWailaPlugin {
 		registration.registerBlockComponent(ProgressProvider.Client.BLOCK, Block.class);
 		registration.registerEntityComponent(ProgressProvider.Client.ENTITY, Entity.class);
 
-		Component category = Component.translatable("config.jade.plugin_jade");
+		ITextComponent category = new TextComponentTranslation("config.jade.plugin_jade");
 		registration.setConfigCategoryOverride(JadeIds.UNIVERSAL_ITEM_STORAGE, category);
 		registration.setConfigCategoryOverride(JadeIds.UNIVERSAL_FLUID_STORAGE, category);
 		registration.setConfigCategoryOverride(JadeIds.UNIVERSAL_ENERGY_STORAGE, category);

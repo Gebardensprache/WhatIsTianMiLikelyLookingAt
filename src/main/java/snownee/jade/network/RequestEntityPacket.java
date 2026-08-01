@@ -3,37 +3,70 @@ package snownee.jade.network;
 import java.util.List;
 import java.util.Objects;
 
+import com.google.common.collect.Lists;
+
 import io.netty.buffer.ByteBuf;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.PacketBuffer;
+import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
+import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
+import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IServerDataProvider;
-import snownee.jade.api.JadeIds;
 import snownee.jade.impl.EntityAccessorImpl;
 import snownee.jade.impl.WailaCommonRegistration;
 
-public record RequestEntityPacket(
-		EntityAccessorImpl.SyncData data,
-		List<IServerDataProvider<EntityAccessor>> dataProviders) implements CustomPacketPayload {
-	public static final Type<RequestEntityPacket> TYPE = new Type<>(JadeIds.PACKET_REQUEST_ENTITY);
-	public static final StreamCodec<RegistryFriendlyByteBuf, RequestEntityPacket> CODEC = StreamCodec.composite(
-			EntityAccessorImpl.SyncData.STREAM_CODEC,
-			RequestEntityPacket::data,
-			ByteBufCodecs.<ByteBuf, IServerDataProvider<EntityAccessor>>list()
-					.apply(ByteBufCodecs.idMapper(
-							$ -> Objects.requireNonNull(WailaCommonRegistration.instance().entityDataProviders.idMapper().byId($)),
-							$ -> WailaCommonRegistration.instance().entityDataProviders.idMapper().getIdOrThrow($))),
-			RequestEntityPacket::dataProviders,
-			RequestEntityPacket::new);
+public class RequestEntityPacket implements IMessage {
+
+	private EntityAccessorImpl.SyncData data;
+	private List<IServerDataProvider<EntityAccessor>> dataProviders;
+
+	public RequestEntityPacket() {
+	}
+
+	public RequestEntityPacket(EntityAccessorImpl.SyncData data, List<IServerDataProvider<EntityAccessor>> dataProviders) {
+		this.data = data;
+		this.dataProviders = dataProviders;
+	}
+
+	public EntityAccessorImpl.SyncData data() {
+		return data;
+	}
+
+	public List<IServerDataProvider<EntityAccessor>> dataProviders() {
+		return dataProviders;
+	}
+
+	@Override
+	public void fromBytes(ByteBuf buf) {
+		PacketBuffer packet = new PacketBuffer(buf);
+		data = EntityAccessorImpl.SyncData.STREAM_CODEC.decode(packet);
+		int size = packet.readVarInt();
+		dataProviders = Lists.newArrayListWithExpectedSize(size);
+		for (int i = 0; i < size; i++) {
+			dataProviders.add(Objects.requireNonNull(
+					WailaCommonRegistration.instance().entityDataProviders.idMapper().byId(packet.readVarInt())));
+		}
+	}
+
+	@Override
+	public void toBytes(ByteBuf buf) {
+		PacketBuffer packet = new PacketBuffer(buf);
+		EntityAccessorImpl.SyncData.STREAM_CODEC.encode(packet, data);
+		packet.writeVarInt(dataProviders.size());
+		for (IServerDataProvider<EntityAccessor> provider : dataProviders) {
+			packet.writeVarInt(WailaCommonRegistration.instance().entityDataProviders.idMapper().getIdOrThrow(provider));
+		}
+	}
 
 	public static void handle(RequestEntityPacket message, ServerPayloadContext context) {
 		EntityAccessorImpl.handleRequest(message, context, tag -> ReceiveDataPacket.send(tag, context));
 	}
 
-	@Override
-	public Type<? extends CustomPacketPayload> type() {
-		return TYPE;
+	public static class Handler implements IMessageHandler<RequestEntityPacket, IMessage> {
+		@Override
+		public IMessage onMessage(RequestEntityPacket message, MessageContext ctx) {
+			handle(message, ServerPayloadContext.of(ctx.getServerHandler().player));
+			return null;
+		}
 	}
 }

@@ -6,7 +6,7 @@ import java.util.Objects;
 import org.jetbrains.annotations.Contract;
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.item.ItemStack;
 import snownee.jade.api.ui.Element;
 
 /**

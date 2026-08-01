@@ -1,6 +1,6 @@
 package snownee.jade.api.harvest;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 
 /**
  * Notifies listeners that a tool tier was added to a tool type.
@@ -14,5 +14,5 @@ public interface ToolTierAddedCallback {
 	 * @param tierId tier identifier
 	 * @param tier tier instance
 	 */
-	void onAdded(ToolType type, Identifier tierId, ToolTier tier);
+	void onAdded(ToolType type, ResourceLocation tierId, ToolTier tier);
 }

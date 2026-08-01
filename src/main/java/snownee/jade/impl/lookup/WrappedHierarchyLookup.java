@@ -15,8 +15,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.Block;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.block.Block;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IJadeProvider;
@@ -98,7 +98,7 @@ public class WrappedHierarchyLookup<T extends IJadeProvider> extends HierarchyLo
 	}
 
 	@Override
-	public void loadComplete(PriorityStore<Identifier, IJadeProvider> priorityStore) {
+	public void loadComplete(PriorityStore<ResourceLocation, IJadeProvider> priorityStore) {
 		for (var override : overrides) {
 			override.getLeft().loadComplete(priorityStore);
 		}

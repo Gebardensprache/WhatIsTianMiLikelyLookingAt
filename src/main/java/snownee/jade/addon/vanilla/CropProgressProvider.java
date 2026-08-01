@@ -1,21 +1,22 @@
 package snownee.jade.addon.vanilla;
 
+import java.util.Collection;
+import java.util.Collections;
+
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
-import net.minecraft.tags.BlockTags;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.BonemealableBlock;
-import net.minecraft.world.level.block.CropBlock;
-import net.minecraft.world.level.block.FarmlandBlock;
-import net.minecraft.world.level.block.NetherWartBlock;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockCrops;
+import net.minecraft.block.BlockNetherWart;
+import net.minecraft.block.IGrowable;
+import net.minecraft.block.properties.IProperty;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.init.Blocks;
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentTranslation;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -43,44 +44,60 @@ public class CropProgressProvider implements IBlockComponentProvider {
 
 	@Override
 	public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-		BlockState state = accessor.getBlockState();
+		IBlockState state = accessor.getBlockState();
 		Block block = state.getBlock();
 
-		if (block instanceof CropBlock crop) {
-			addMaturityTooltip(tooltip, crop.getAge(state) / (float) crop.getMaxAge());
-		} else if (block instanceof NetherWartBlock || block instanceof BonemealableBlock) {
-			if (state.hasProperty(BlockStateProperties.AGE_2)) {
-				addMaturityTooltip(tooltip, state.getValue(BlockStateProperties.AGE_2) / 2F);
-			} else if (state.hasProperty(BlockStateProperties.AGE_3)) {
-				addMaturityTooltip(tooltip, state.getValue(BlockStateProperties.AGE_3) / 3F);
-			} else if (state.hasProperty(BlockStateProperties.AGE_4)) {
-				addMaturityTooltip(tooltip, state.getValue(BlockStateProperties.AGE_4) / 4F);
-			} else if (state.hasProperty(BlockStateProperties.AGE_5)) {
-				addMaturityTooltip(tooltip, state.getValue(BlockStateProperties.AGE_5) / 5F);
-			} else if (state.hasProperty(BlockStateProperties.AGE_7)) {
-				addMaturityTooltip(tooltip, state.getValue(BlockStateProperties.AGE_7) / 7F);
-			} else if (state.hasProperty(BlockStateProperties.AGE_15)) {
-				addMaturityTooltip(tooltip, state.getValue(BlockStateProperties.AGE_15) / 15F);
-			} else if (state.is(BlockTags.MAINTAINS_FARMLAND) && accessor.getLevel()
-					.getBlockState(accessor.getPosition().below())
-					.getBlock() instanceof FarmlandBlock) {
-				addMaturityTooltip(tooltip, 1);
+		// 1.12.2: BlockCrops.getAge/getMaxAge are protected, and BlockBeetroot overrides the age
+		// property with its own 0-3 PropertyInteger (BEETROOT_AGE). Both are still named "age", so
+		// the growth fraction is read off whichever integer property carries that name.
+		if (block instanceof BlockCrops) {
+			addAgeTooltip(tooltip, state);
+		} else if (block instanceof BlockNetherWart || block instanceof IGrowable) {
+			// 1.12.2: BlockNetherWart does not implement IGrowable, so it needs its own branch.
+			// The BlockStateProperties.AGE_* ladder is replaced by the same generic "age" lookup:
+			// it covers cocoa (0-2), nether wart (0-3) and any modded IGrowable using that name.
+			addAgeTooltip(tooltip, state);
+		}
+		// 1.12.2: the BlockTags.MAINTAINS_FARMLAND / FarmlandBlock fallback is dropped -- block tags
+		// do not exist, and no vanilla 1.12.2 block needs the "fully grown" shortcut it provided.
+	}
+
+	/**
+	 * 1.12.2: replacement for the modern {@code state.hasProperty(BlockStateProperties.AGE_n)} ladder.
+	 * Finds the block's integer age property by name and reports {@code age / maxAge}.
+	 */
+	private static void addAgeTooltip(ITooltip tooltip, IBlockState state) {
+		for (IProperty<?> property : state.getPropertyKeys()) {
+			if (!"age".equals(property.getName()) || property.getValueClass() != Integer.class) {
+				continue;
 			}
+			@SuppressWarnings("unchecked")
+			IProperty<Integer> ageProperty = (IProperty<Integer>) property;
+			Collection<Integer> allowed = ageProperty.getAllowedValues();
+			if (allowed.isEmpty()) {
+				return;
+			}
+			int maxAge = Collections.max(allowed);
+			if (maxAge <= 0) {
+				return;
+			}
+			addMaturityTooltip(tooltip, state.getValue(ageProperty) / (float) maxAge);
+			return;
 		}
 	}
 
 	private static void addMaturityTooltip(ITooltip tooltip, float growthValue) {
-		MutableComponent component;
+		ITextComponent component;
 		if (growthValue < 1) {
 			component = IThemeHelper.get().info(String.format("%.0f%%", growthValue * 100));
 		} else {
-			component = IThemeHelper.get().success(Component.translatable("tooltip.jade.crop_mature"));
+			component = IThemeHelper.get().success(new TextComponentTranslation("tooltip.jade.crop_mature"));
 		}
-		tooltip.add(Component.translatable("tooltip.jade.crop_growth", component));
+		tooltip.add(new TextComponentTranslation("tooltip.jade.crop_growth", component));
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_CROP_PROGRESS;
 	}
 

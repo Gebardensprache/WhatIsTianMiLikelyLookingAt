@@ -2,18 +2,15 @@ package snownee.jade.impl.ui;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.KeyboardHandler;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.util.Mth;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.event.HoverEvent;
 import snownee.jade.api.ui.Element;
 import snownee.jade.overlay.DisplayHelper;
-import snownee.jade.util.ComponentHolders;
 
 public class ItemStackElement extends Element {
 
@@ -25,7 +22,7 @@ public class ItemStackElement extends Element {
 		this.item = item;
 		this.scale = scale == 0 ? 1 : scale;
 		this.text = text;
-		width = height = Mth.floor(18 * scale);
+		width = height = MathHelper.floor(18 * scale);
 	}
 
 	public static ItemStackElement of(ItemStack stack) {
@@ -41,35 +38,39 @@ public class ItemStackElement extends Element {
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+	public void extractRenderState(int mouseX, int mouseY, float partialTicks) {
 		if (item.isEmpty()) {
 			return;
 		}
 		if (mouseX != -1 && getRectangle().containsPoint(mouseX, mouseY)) {
-			setHoverEffect(graphics, new HoverEvent.ShowItem(ItemStackTemplate.fromNonEmptyStack(item)));
+			setHoverEffect(new HoverEvent(HoverEvent.Action.SHOW_ITEM, new TextComponentString(item.writeToNBT(new NBTTagCompound()).toString())));
 		}
-		DisplayHelper.INSTANCE.drawItem(graphics, getX() + 1, getY() + 1, item, scale, text);
+		DisplayHelper.INSTANCE.drawItem(getX() + 1, getY() + 1, item, scale, text);
 	}
 
 	@Override
-	public @Nullable Component getNarration() {
+	public @Nullable ITextComponent getNarration() {
 		if (item.isEmpty()) {
 			return null;
 		}
-		return Component.literal("%s %s".formatted(item.getCount(), item.getHoverName().getString()));
+		return new TextComponentString("%s %s".formatted(item.getCount(), item.getDisplayName()));
 	}
 
 	public ItemStack getItem() {
 		return item;
 	}
 
+	/**
+	 * 1.12.2: upstream serializes the item's full component data via {@code ComponentHolders.serialize(...)}
+	 * against the connection's registry access, neither of which exist here. Falls back to copying the
+	 * item's NBT representation as a plain string.
+	 */
 	@Override
-	public boolean copyToClipboard(KeyboardHandler keyboardHandler) {
-		ClientPacketListener connection = Minecraft.getInstance().getConnection();
-		if (item.isEmpty() || connection == null) {
+	public boolean copyToClipboard() {
+		if (item.isEmpty()) {
 			return false;
 		}
-		keyboardHandler.setClipboard(ComponentHolders.serialize(item.typeHolder(), item.getComponentsPatch(), connection.registryAccess()));
+		GuiScreen.setClipboardString(item.writeToNBT(new NBTTagCompound()).toString());
 		return true;
 	}
 }

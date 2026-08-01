@@ -13,23 +13,28 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.platform.InputConstants;
 
-import net.minecraft.client.KeyMapping;
+import net.minecraft.client.settings.KeyBinding;
 import snownee.jade.key_extension.KeyExManager;
 import snownee.jade.key_extension.KeyMappingEx;
 
-@Mixin(value = KeyMapping.class, priority = 900)
+/**
+ * Implements the {@link KeyMappingEx} duck interface on
+ * {@link net.minecraft.client.settings.KeyBinding} and keeps the legacy static dispatch
+ * hash in sync with the active state.
+ * <p>
+ * 1.12.2: the modern {@code KeyMapping.click/set/setAll/resetMapping} surfaces do not
+ * exist; the dispatch surfaces are {@code KeyBinding.onTick}, {@code setKeyBindState}
+ * and {@code resetKeyBindingArrayAndHash}.
+ */
+@Mixin(value = KeyBinding.class, priority = 900)
 public abstract class KeyMappingMixin implements KeyMappingEx {
 
 	@Shadow
 	@Final
-	private static Map<String, KeyMapping> ALL;
+	private static Map<String, KeyBinding> KEYBIND_ARRAY;
 	@Shadow
-	protected InputConstants.Key key;
-
-	@Shadow
-	public abstract boolean isUnbound();
+	private int keyCode;
 
 	@Unique
 	private boolean active = true;
@@ -43,35 +48,42 @@ public abstract class KeyMappingMixin implements KeyMappingEx {
 	public void keyEx$setActive(boolean active) {
 		boolean changed = this.active != active;
 		this.active = active;
-		if (changed && !isUnbound()) {
+		// An unbound binding (keyCode 0) is never dispatched anyway; only an actually
+		// bound binding's state change requires the hash rebuild.
+		if (changed && keyCode != 0) {
 			KeyExManager.markDirty();
 		}
 	}
 
 	@Override
-	public InputConstants.Key keyEx$key() {
-		return key;
+	public int keyEx$key() {
+		return keyCode;
 	}
 
-	@WrapOperation(method = "setAll", at = @At(value = "INVOKE", target = "Ljava/util/Map;values()Ljava/util/Collection;"))
-	private static Collection<KeyMapping> keyEx$setAll(Map<String, KeyMapping> map, Operation<Collection<KeyMapping>> original) {
-		return KeyExManager.activeKeys();
-	}
-
-	@WrapOperation(method = "resetMapping", at = @At(value = "INVOKE", target = "Ljava/util/Map;values()Ljava/util/Collection;"))
-	private static Collection<KeyMapping> keyEx$resetMapping(Map<String, KeyMapping> map, Operation<Collection<KeyMapping>> original) {
-		return original.call(map).stream()
-				.filter($ -> ((KeyMappingEx) $).keyEx$isActive())
-				.toList();
-	}
-
-	@Inject(method = {"click", "set"}, at = @At("HEAD"), order = 800)
+	/**
+	 * Before any dispatch lookup, rebuild the hash if profile activation changed it.
+	 */
+	@Inject(method = {"onTick", "setKeyBindState"}, at = @At("HEAD"), order = 800)
 	private static void keyEx$checkDirty(CallbackInfo ci) {
 		KeyExManager.checkDirty();
 	}
 
-	@Inject(method = "resetMapping", at = @At("HEAD"))
+	/**
+	 * Clears the dirty flag for the duration of the rebuild so the wrap below cannot
+	 * trigger a re-entrant rebuild.
+	 */
+	@Inject(method = "resetKeyBindingArrayAndHash", at = @At("HEAD"))
 	private static void keyEx$resetMapping(CallbackInfo ci) {
-		KeyExManager.resetMapping(ALL);
+		KeyExManager.resetMapping(KEYBIND_ARRAY);
+	}
+
+	/**
+	 * Only active bindings may enter the dispatch hash.
+	 */
+	@WrapOperation(method = "resetKeyBindingArrayAndHash", at = @At(value = "INVOKE", target = "Ljava/util/Map;values()Ljava/util/Collection;"))
+	private static Collection<KeyBinding> keyEx$resetMapping(Map<String, KeyBinding> map, Operation<Collection<KeyBinding>> original) {
+		return original.call(map).stream()
+				.filter($ -> ((KeyMappingEx) $).keyEx$isActive())
+				.toList();
 	}
 }

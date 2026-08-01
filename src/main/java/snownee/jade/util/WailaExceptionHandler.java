@@ -13,9 +13,11 @@ import org.jspecify.annotations.Nullable;
 
 import com.google.common.collect.Sets;
 
-import net.minecraft.ChatFormatting;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.Jade;
 import snownee.jade.api.IJadeProvider;
 import snownee.jade.api.TraceableException;
@@ -27,7 +29,7 @@ public class WailaExceptionHandler {
 	private static boolean NULL_ERROR = false;
 	private static final File ERROR_OUTPUT = new File("logs", "JadeErrorOutput.txt");
 
-	public static void handleErr(Throwable e, @Nullable IJadeProvider provider, @Nullable Consumer<Component> tooltip) {
+	public static void handleErr(Throwable e, @Nullable IJadeProvider provider, @Nullable Consumer<ITextComponent> tooltip) {
 		if (CommonProxy.isDevEnv() && !IWailaConfig.get().general().isDebug()) {
 			ExceptionUtils.wrapAndThrow(e);
 			return;
@@ -48,11 +50,11 @@ public class WailaExceptionHandler {
 			} else if (provider != null) {
 				modid = provider.getUid().getNamespace();
 			}
-			if (modid == null || Identifier.DEFAULT_NAMESPACE.equals(modid)) {
+			if (modid == null || "minecraft".equals(modid)) {
 				modid = Jade.ID;
 			}
-			tooltip.accept(Component.translatable("jade.error", ModIdentification.getModFullName(modid).orElse(modid))
-					.withStyle(ChatFormatting.DARK_RED));
+			tooltip.accept(new TextComponentTranslation("jade.error", ModIdentification.getModFullName(modid).orElse(modid))
+					.setStyle(new Style().setColor(TextFormatting.DARK_RED)));
 		}
 	}
 

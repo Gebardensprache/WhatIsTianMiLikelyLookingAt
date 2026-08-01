@@ -4,16 +4,12 @@ import java.util.function.Consumer;
 
 import org.jspecify.annotations.Nullable;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.InputConstants;
-
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.layouts.LayoutElement;
-import net.minecraft.locale.Language;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.Util;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.item.ItemStack;
+import org.lwjgl.input.Keyboard;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.fluid.JadeFluidObject;
 import snownee.jade.api.view.ProgressView;
@@ -23,7 +19,7 @@ import snownee.jade.impl.ui.JadeUIInternal;
  * Static factory and utility methods for Jade UI elements.
  */
 public final class JadeUI {
-	private static final boolean ON_OSX = Util.getPlatform() == Util.OS.OSX;
+	private static final boolean ON_OSX = Util.getOSType() == Util.EnumOS.OSX;
 
 	/**
 	 * Returns whether the given element is empty.
@@ -41,7 +37,7 @@ public final class JadeUI {
 	 * @param component text component
 	 * @return text element
 	 */
-	public static TextElement text(Component component) {
+	public static TextElement text(ITextComponent component) {
 		return JadeUIInternal.text(component);
 	}
 
@@ -155,11 +151,11 @@ public final class JadeUI {
 	 */
 	public static ResizeableElement progress(
 			float progress,
-			Identifier baseSprite,
-			Identifier progressSprite,
+			ResourceLocation baseSprite,
+			ResourceLocation progressSprite,
 			int width,
 			int height,
-			@Nullable Component text,
+			@Nullable ITextComponent text,
 			@Nullable ProgressStyle style) {
 		return JadeUIInternal.progress(progress, baseSprite, progressSprite, width, height, text, style);
 	}
@@ -206,56 +202,40 @@ public final class JadeUI {
 	/**
 	 * Creates a sprite element.
 	 *
-	 * @param renderPipeline render pipeline
 	 * @param sprite sprite identifier
 	 * @param width width
 	 * @param height height
 	 * @return sprite element
 	 */
-	public static ResizeableElement sprite(RenderPipeline renderPipeline, Identifier sprite, int width, int height) {
-		return JadeUIInternal.sprite(renderPipeline, sprite, width, height);
-	}
-
-	/**
-	 * Creates a sprite element.
-	 *
-	 * @param sprite sprite identifier
-	 * @param width width
-	 * @param height height
-	 * @return sprite element
-	 */
-	public static ResizeableElement sprite(Identifier sprite, int width, int height) {
+	public static ResizeableElement sprite(ResourceLocation sprite, int width, int height) {
 		return JadeUIInternal.sprite(sprite, width, height);
 	}
 
 	/**
 	 * Creates a horizontally tiled sprite element.
 	 *
-	 * @param renderPipeline render pipeline
 	 * @param sprite sprite identifier
 	 * @param width width
 	 * @param height height
 	 * @return sprite element
 	 */
 	public static ResizeableElement horizontalTiledSprite(
-			RenderPipeline renderPipeline,
-			Identifier sprite,
+			ResourceLocation sprite,
 			int width,
 			int height) {
-		return JadeUIInternal.horizontalTiledSprite(renderPipeline, sprite, width, height);
+		return JadeUIInternal.horizontalTiledSprite(sprite, width, height);
 	}
 
 	/**
 	 * Creates a vertically tiled sprite element.
 	 *
-	 * @param renderPipeline render pipeline
 	 * @param sprite sprite identifier
 	 * @param width width
 	 * @param height height
 	 * @return sprite element
 	 */
-	public static ResizeableElement verticalTiledSprite(RenderPipeline renderPipeline, Identifier sprite, int width, int height) {
-		return JadeUIInternal.verticalTiledSprite(renderPipeline, sprite, width, height);
+	public static ResizeableElement verticalTiledSprite(ResourceLocation sprite, int width, int height) {
+		return JadeUIInternal.verticalTiledSprite(sprite, width, height);
 	}
 
 	/**
@@ -284,11 +264,11 @@ public final class JadeUI {
 	 */
 	public static boolean hasControlDown() {
 		if (ON_OSX) {
-			return InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), 343) ||
-					InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), 347);
+			return Keyboard.isKeyDown(Keyboard.KEY_LMETA) ||
+					Keyboard.isKeyDown(Keyboard.KEY_RMETA);
 		}
-		return InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), 341) ||
-				InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), 345);
+		return Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) ||
+				Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
 	}
 
 	/**
@@ -297,8 +277,8 @@ public final class JadeUI {
 	 * @return {@code true} if shift is down
 	 */
 	public static boolean hasShiftDown() {
-		return InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), 340) ||
-				InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), 344);
+		return Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) ||
+				Keyboard.isKeyDown(Keyboard.KEY_RSHIFT);
 	}
 
 	/**
@@ -307,8 +287,8 @@ public final class JadeUI {
 	 * @return {@code true} if alt is down
 	 */
 	public static boolean hasAltDown() {
-		return InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), 342) ||
-				InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), 346);
+		return Keyboard.isKeyDown(Keyboard.KEY_LMENU) ||
+				Keyboard.isKeyDown(Keyboard.KEY_RMENU);
 	}
 
 	/**
@@ -318,6 +298,6 @@ public final class JadeUI {
 	 * @return {@code true} if the key has a translation
 	 */
 	public static boolean hasTranslation(String key) {
-		return Language.getInstance().has(key);
+		return I18n.hasKey(key);
 	}
 }

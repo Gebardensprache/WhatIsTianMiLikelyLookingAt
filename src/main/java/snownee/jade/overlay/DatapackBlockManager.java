@@ -1,105 +1,50 @@
 package snownee.jade.overlay;
 
-import java.util.List;
-
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
 
-import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
-import it.unimi.dsi.fastutil.ints.IntSet;
-import it.unimi.dsi.fastutil.ints.IntSets;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.world.entity.Display;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityTypes;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.level.LevelAccessor;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.HitResult;
-import snownee.jade.Jade;
+import net.minecraft.entity.Entity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
+import net.minecraft.world.World;
 import snownee.jade.api.Accessor;
-import snownee.jade.impl.BlockAccessorImpl;
-import snownee.jade.impl.EntityAccessorImpl;
-import snownee.jade.util.ModIdentification;
+import snownee.jade.impl.WailaClientRegistration;
+import snownee.jade.util.ClientProxy;
 
+/**
+ * 1.12.2: upstream tracks vanilla {@code Display.BlockDisplay}/{@code Display.ItemDisplay}
+ * entities (a post-1.19.4 vanilla feature) so a datapack-camouflaged block/entity can borrow
+ * that display entity's rendered item/block for its tooltip icon. Neither the {@code Display}
+ * entity hierarchy nor datapack block/entity camouflage exist in 1.12.2, and there is no
+ * equivalent mechanism to substitute. This class is therefore reduced to a permanent no-op:
+ * every method keeps its upstream name and signature (needed by
+ * {@link snownee.jade.impl.WailaClientRegistration#getBlockCamouflage(World, BlockPos)} and
+ * {@link snownee.jade.util.ClientProxy}'s entity join/leave listeners) but the join/leave
+ * tracking set is dropped, {@link #isAcceptableEntity(Entity)} always returns {@code false},
+ * {@link #getFakeBlock(World, BlockPos)} always returns {@link ItemStack#EMPTY}, and
+ * {@link #override(RayTraceResult, Accessor, Accessor)} returns the accessor unchanged.
+ */
 public class DatapackBlockManager {
-	public static final Logger LOGGER = Jade.LOGGER;
-	private static final IntSet displays = IntSets.synchronize(IntOpenHashSet.of());
 
 	public static void onEntityJoin(Entity entity) {
-		if (isAcceptableEntity(entity)) {
-			displays.add(entity.getId());
-		}
+		// 1.12.2: no display-entity tracking; intentional no-op.
 	}
 
 	public static void onEntityLeave(Entity entity) {
-		if (isAcceptableEntity(entity)) {
-			displays.remove(entity.getId());
-		}
+		// 1.12.2: no display-entity tracking; intentional no-op.
 	}
 
-	public static ItemStack getFakeBlock(LevelAccessor level, BlockPos pos) {
-		if (displays.isEmpty()) {
-			return ItemStack.EMPTY;
-		}
-		List<Display> entities = level.getEntitiesOfClass(Display.class, new AABB(pos), DatapackBlockManager::isAcceptableEntity);
-		if (entities.isEmpty()) {
-			return ItemStack.EMPTY;
-		}
-
-		ItemStack selectedItem = ItemStack.EMPTY;
-		float selectedScore = 0f;
-		for (Display display : entities) {
-			if (!displays.contains(display.getId())) {
-				continue;
-			}
-			ItemStack itemStack = ItemStack.EMPTY;
-			if (display instanceof Display.BlockDisplay blockDisplay) {
-				itemStack = blockDisplay.getBlockState().getCloneItemStack(level, pos, false);
-			} else if (display instanceof Display.ItemDisplay itemDisplay) {
-				itemStack = itemDisplay.getItemStack();
-			}
-			float score = 0f;
-			if (itemStack.isEmpty()) {
-				continue;
-			}
-			if (itemStack.hasNonDefault(DataComponents.CUSTOM_DATA)) {
-				CustomData data = itemStack.get(DataComponents.CUSTOM_DATA);
-				if (data != null && data.tag.contains(ModIdentification.JADE_STACK)) {
-					score += 10f;
-				} else if (data != null && data.tag.contains(ModIdentification.POLYMER_STACK)) {
-					score += 2f;
-				}
-			}
-			if (itemStack.hasNonDefault(DataComponents.ITEM_MODEL)) {
-				score += 1f;
-			}
-			if (score > selectedScore) {
-				selectedItem = itemStack;
-				selectedScore = score;
-			}
-		}
-		return selectedItem;
+	public static ItemStack getFakeBlock(World level, BlockPos pos) {
+		return ItemStack.EMPTY;
 	}
 
 	@Nullable
-	public static Accessor<?> override(HitResult hitResult, @Nullable Accessor<?> accessor, @Nullable Accessor<?> originalAccessor) {
-		if (accessor instanceof BlockAccessorImpl target && target.getServersideRep().isEmpty()) {
-			target.setServersideRep(getFakeBlock(target.getLevel(), target.getPosition()));
-		} else if (accessor instanceof EntityAccessorImpl target && target.getServersideRep().isEmpty() &&
-				target.getEntity() instanceof Display.ItemDisplay display) {
-			ItemStack itemStack = display.getItemStack();
-			if (ModIdentification.getSpecialId(itemStack).isPresent()) {
-				target.setServersideRep(itemStack);
-			}
-		}
+	public static Accessor<?> override(RayTraceResult hitResult, @Nullable Accessor<?> accessor, @Nullable Accessor<?> originalAccessor) {
 		return accessor;
 	}
 
 	public static boolean isAcceptableEntity(Entity entity) {
-		return entity.getType() == EntityTypes.BLOCK_DISPLAY || entity.getType() == EntityTypes.ITEM_DISPLAY;
+		return false;
 	}
 
 }

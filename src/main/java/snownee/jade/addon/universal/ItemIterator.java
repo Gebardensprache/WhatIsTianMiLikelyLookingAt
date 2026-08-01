@@ -9,8 +9,8 @@ import org.jspecify.annotations.Nullable;
 
 import com.google.common.math.IntMath;
 
-import net.minecraft.world.Container;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.item.ItemStack;
 import snownee.jade.api.Accessor;
 import snownee.jade.util.CommonProxy;
 
@@ -87,23 +87,23 @@ public abstract class ItemIterator<T> {
 		}
 	}
 
-	public static class ContainerItemIterator extends SlottedItemIterator<Container> {
+	public static class ContainerItemIterator extends SlottedItemIterator<IInventory> {
 		public ContainerItemIterator(int fromIndex) {
 			this(CommonProxy::findContainer, fromIndex);
 		}
 
-		public ContainerItemIterator(Function<Accessor<?>, @Nullable Container> containerFinder, int fromIndex) {
+		public ContainerItemIterator(Function<Accessor<?>, @Nullable IInventory> containerFinder, int fromIndex) {
 			super(containerFinder, fromIndex);
 		}
 
 		@Override
-		protected int getSlotCount(Container container) {
-			return container.getContainerSize();
+		protected int getSlotCount(IInventory container) {
+			return container.getSizeInventory();
 		}
 
 		@Override
-		protected ItemStack getItemInSlot(Container container, int slot) {
-			return container.getItem(slot);
+		protected ItemStack getItemInSlot(IInventory container, int slot) {
+			return container.getStackInSlot(slot);
 		}
 	}
 

@@ -1,16 +1,16 @@
 package snownee.jade.impl.template;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.TooltipPosition;
 
 public final class TemplateBlockComponentProvider extends TemplateComponentProvider<BlockAccessor> implements IBlockComponentProvider {
-	public TemplateBlockComponentProvider(Identifier uid) {
+	public TemplateBlockComponentProvider(ResourceLocation uid) {
 		this(uid, false, true, TooltipPosition.BODY);
 	}
 
-	public TemplateBlockComponentProvider(Identifier uid, boolean required, boolean enabledByDefault, int defaultPriority) {
+	public TemplateBlockComponentProvider(ResourceLocation uid, boolean required, boolean enabledByDefault, int defaultPriority) {
 		super(uid, required, enabledByDefault, defaultPriority);
 	}
 }

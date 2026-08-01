@@ -1,8 +1,8 @@
 package snownee.jade.api.platform;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 
 /**
  * Calculates an enchantment power bonus for a block.
@@ -18,6 +18,6 @@ public interface CustomEnchantPower {
 	 * @param pos block position
 	 * @return enchantment power bonus
 	 */
-	float getEnchantPowerBonus(BlockState state, Level world, BlockPos pos);
+	float getEnchantPowerBonus(IBlockState state, World world, BlockPos pos);
 
 }

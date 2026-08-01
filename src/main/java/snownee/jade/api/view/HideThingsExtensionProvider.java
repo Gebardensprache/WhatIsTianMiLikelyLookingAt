@@ -1,8 +1,9 @@
 package snownee.jade.api.view;
 
+import java.util.Collections;
 import java.util.List;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.JadeIds;
 
@@ -14,16 +15,16 @@ public class HideThingsExtensionProvider<IN, OUT> implements IServerExtensionPro
 
 	@Override
 	public List<ViewGroup<IN>> getGroups(Accessor<?> accessor) {
-		return List.of();
+		return Collections.emptyList();
 	}
 
 	@Override
 	public List<ClientViewGroup<OUT>> getClientGroups(Accessor<?> accessor, List<ViewGroup<IN>> viewGroups) {
-		return List.of();
+		return Collections.emptyList();
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.UNIVERSAL_HIDE_THINGS;
 	}
 

@@ -4,37 +4,36 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import net.minecraft.network.PacketBuffer;
+
 import org.apache.commons.lang3.ArrayUtils;
 import org.jspecify.annotations.Nullable;
 
 import io.netty.buffer.Unpooled;
-import net.minecraft.nbt.ByteArrayTag;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamDecoder;
-import net.minecraft.network.codec.StreamEncoder;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.HitResult;
+import net.minecraft.nbt.NBTTagByteArray;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTBase;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.world.World;
+import net.minecraft.util.math.RayTraceResult;
 
 /**
  * Base implementation for Jade accessors.
  *
  * @param <T> hit result type handled by this accessor
  */
-public abstract class AccessorImpl<T extends HitResult> implements Accessor<T> {
+public abstract class AccessorImpl<T extends RayTraceResult> implements Accessor<T> {
 
-	private final Level level;
-	private final Player player;
+	private final World level;
+	private final EntityPlayer player;
 	private final Supplier<T> hit;
 	private final boolean serverConnected;
 	private final boolean showDetails;
 	protected ItemStack serversideRep = ItemStack.EMPTY;
-	private CompoundTag serverData;
+	private NBTTagCompound serverData;
 	protected boolean verify;
-	private @Nullable RegistryFriendlyByteBuf buffer;
+	private @Nullable PacketBuffer buffer;
 
 	/**
 	 * Creates a new accessor implementation.
@@ -47,9 +46,9 @@ public abstract class AccessorImpl<T extends HitResult> implements Accessor<T> {
 	 * @param showDetails whether detailed target data should be shown
 	 */
 	public AccessorImpl(
-			Level level,
-			Player player,
-			@Nullable CompoundTag serverData,
+			World level,
+			EntityPlayer player,
+			@Nullable NBTTagCompound serverData,
 			Supplier<T> hit,
 			boolean serverConnected,
 			boolean showDetails) {
@@ -62,17 +61,17 @@ public abstract class AccessorImpl<T extends HitResult> implements Accessor<T> {
 	}
 
 	@Override
-	public Level getLevel() {
+	public World getLevel() {
 		return level;
 	}
 
 	@Override
-	public Player getPlayer() {
+	public EntityPlayer getPlayer() {
 		return player;
 	}
 
 	@Override
-	public final CompoundTag getServerData() {
+	public final NBTTagCompound getServerData() {
 		return serverData;
 	}
 
@@ -82,23 +81,23 @@ public abstract class AccessorImpl<T extends HitResult> implements Accessor<T> {
 	@SuppressWarnings("DeprecatedIsStillUsed")
 	@Deprecated
 	@Override
-	public final void setServerData(@Nullable CompoundTag serverData) {
-		this.serverData = serverData == null ? new CompoundTag() : serverData;
+	public final void setServerData(@Nullable NBTTagCompound serverData) {
+		this.serverData = serverData == null ? new NBTTagCompound() : serverData;
 	}
 
-	private RegistryFriendlyByteBuf buffer() {
+	private PacketBuffer buffer() {
 		if (buffer == null) {
-			buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), level.registryAccess());
+			buffer = new PacketBuffer(Unpooled.buffer());
 		}
 		buffer.clear();
 		return buffer;
 	}
 
 	@Override
-	public <D> Optional<D> decodeFromNbt(StreamDecoder<RegistryFriendlyByteBuf, D> codec, Tag tag) {
+	public <D> Optional<D> decodeFromNbt(DataCodec<D> codec, NBTBase tag) {
 		try {
-			RegistryFriendlyByteBuf buffer = buffer();
-			buffer.writeBytes(((ByteArrayTag) tag).getAsByteArray());
+			PacketBuffer buffer = buffer();
+			buffer.writeBytes(((NBTTagByteArray) tag).getByteArray());
 			D decoded = codec.decode(buffer);
 			return Optional.of(decoded);
 		} catch (Exception e) {
@@ -111,10 +110,10 @@ public abstract class AccessorImpl<T extends HitResult> implements Accessor<T> {
 	}
 
 	@Override
-	public <D> Tag encodeAsNbt(StreamEncoder<RegistryFriendlyByteBuf, D> streamCodec, D value) {
-		RegistryFriendlyByteBuf buffer = buffer();
-		streamCodec.encode(buffer, value);
-		ByteArrayTag tag = new ByteArrayTag(ArrayUtils.subarray(buffer.array(), 0, buffer.readableBytes()));
+	public <D> NBTBase encodeAsNbt(DataCodec<D> codec, D value) {
+		PacketBuffer buffer = buffer();
+		codec.encode(buffer, value);
+		NBTTagByteArray tag = new NBTTagByteArray(ArrayUtils.subarray(buffer.array(), 0, buffer.readableBytes()));
 		buffer.clear();
 		return tag;
 	}
@@ -154,7 +153,7 @@ public abstract class AccessorImpl<T extends HitResult> implements Accessor<T> {
 
 	@Override
 	public float tickRate() {
-		return getLevel().tickRateManager().tickrate();
+		return 20.0F;
 	}
 
 	@Override

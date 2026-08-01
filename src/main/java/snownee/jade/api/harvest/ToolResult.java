@@ -2,7 +2,7 @@ package snownee.jade.api.harvest;
 
 import com.google.common.base.Preconditions;
 
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.item.ItemStack;
 
 /**
  * Result of evaluating whether a tool tier matches a block state.

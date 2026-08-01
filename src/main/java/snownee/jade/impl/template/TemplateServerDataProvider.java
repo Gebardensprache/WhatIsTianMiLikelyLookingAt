@@ -3,8 +3,8 @@ package snownee.jade.impl.template;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.IServerDataProvider;
 
@@ -12,21 +12,21 @@ import snownee.jade.api.IServerDataProvider;
  * A template implementation for script languages like KubeJS
  */
 public class TemplateServerDataProvider<T extends Accessor<?>> implements IServerDataProvider<T> {
-	private final Identifier uid;
-	private BiConsumer<CompoundTag, T> dataFunction = (data, accessor) -> {};
+	private final ResourceLocation uid;
+	private BiConsumer<NBTTagCompound, T> dataFunction = (data, accessor) -> {};
 	private Predicate<T> shouldRequestData = accessor -> true;
 
-	protected TemplateServerDataProvider(Identifier uid) {
+	protected TemplateServerDataProvider(ResourceLocation uid) {
 		this.uid = uid;
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return uid;
 	}
 
 	@Override
-	public void appendServerData(CompoundTag data, T accessor) {
+	public void appendServerData(NBTTagCompound data, T accessor) {
 		dataFunction.accept(data, accessor);
 	}
 
@@ -35,7 +35,7 @@ public class TemplateServerDataProvider<T extends Accessor<?>> implements IServe
 		return shouldRequestData.test(accessor);
 	}
 
-	public void setDataFunction(BiConsumer<CompoundTag, T> dataFunction) {
+	public void setDataFunction(BiConsumer<NBTTagCompound, T> dataFunction) {
 		this.dataFunction = dataFunction;
 	}
 

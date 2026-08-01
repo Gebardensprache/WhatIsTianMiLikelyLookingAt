@@ -2,13 +2,13 @@ package snownee.jade.api;
 
 import org.jetbrains.annotations.ApiStatus.NonExtendable;
 
-import net.minecraft.world.effect.MobEffect;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityList;
+import net.minecraft.item.ItemStack;
+import net.minecraft.potion.Potion;
+import net.minecraft.potion.PotionEffect;
+import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
 import snownee.jade.api.config.TargetOperationRepository;
 import snownee.jade.api.view.EnergyView;
 import snownee.jade.api.view.FluidView;
@@ -42,21 +42,21 @@ public interface IWailaCommonRegistration {
 	 *
 	 * @return block operation repository
 	 */
-	TargetOperationRepository<Block, BlockState> blockOperations();
+	TargetOperationRepository<Block, IBlockState> blockOperations();
 
 	/**
 	 * Returns the entity-type operation repository.
 	 *
 	 * @return entity-type operation repository
 	 */
-	TargetOperationRepository<EntityType<?>, Entity> entityTypeOperations();
+	TargetOperationRepository<Class<? extends Entity>, Entity> entityTypeOperations();
 
 	/**
 	 * Returns the mob-effect operation repository.
 	 *
 	 * @return mob-effect operation repository
 	 */
-	TargetOperationRepository<MobEffect, MobEffectInstance> mobEffectOperations();
+	TargetOperationRepository<Potion, PotionEffect> mobEffectOperations();
 
 	/**
 	 * Registers a storage extension provider for item stacks.

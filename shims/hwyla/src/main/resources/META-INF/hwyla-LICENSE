@@ -1,0 +1,10 @@
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+
+The vendored HWYLA API source under src/main/java/mcp/mobius/waila/ is licensed under the
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license,
+Copyright (c) TehNut / ProfMobius. Full license text is available at:
+  https://github.com/TehNut-Mods/HWYLA/blob/1.12/LICENSE.md
+  https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+
+The remainder of this project (the snownee.jade.compat.hwyla bridges and com.jadeshim.hwyla
+entry point) is part of the Jade backport and is distributed under Jade's license.

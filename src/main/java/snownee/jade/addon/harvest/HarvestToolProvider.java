@@ -1,25 +1,27 @@
 package snownee.jade.addon.harvest;
 
-import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.GameType;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.world.GameType;
+import net.minecraft.world.World;
 import snownee.jade.Jade;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
@@ -34,22 +36,24 @@ import snownee.jade.api.ui.Element;
 import snownee.jade.api.ui.JadeUI;
 import snownee.jade.util.ClientProxy;
 import snownee.jade.util.CommonProxy;
-import snownee.jade.util.KeyedResourceManagerReloadListener;
 
-public class HarvestToolProvider implements IBlockComponentProvider, KeyedResourceManagerReloadListener {
+public class HarvestToolProvider implements IBlockComponentProvider {
 	public static final HarvestToolProvider INSTANCE = new HarvestToolProvider();
 
-	private static final Component CHECK = Component.literal("✔");
-	private static final Component X = Component.literal("✕");
-	private final Cache<BlockState, ImmutableList<ItemStack>> resultCache = CacheBuilder.newBuilder()
-			.expireAfterAccess(Duration.ofMinutes(5))
+	private static final ITextComponent CHECK = new TextComponentString("✔");
+	private static final ITextComponent X = new TextComponentString("✕");
+	// 1.12.2: guava 21 has no CacheBuilder.expireAfterAccess(Duration); use the
+	// (long, TimeUnit) overload (5 minutes).
+	private final Cache<IBlockState, ImmutableList<ItemStack>> resultCache = CacheBuilder.newBuilder()
+			.expireAfterAccess(5, TimeUnit.MINUTES)
 			.build();
 
 	static {
-		CommonProxy.registerTagsUpdatedListener((_, _) -> apply());
+		// 1.12.2: tags do not reload; the common proxy fires this after server loading instead.
+		CommonProxy.registerTagsUpdatedListener((server, client) -> apply());
 	}
 
-	public static ImmutableList<ItemStack> getTool(BlockState state, Level level, BlockPos pos) {
+	public static ImmutableList<ItemStack> getTool(IBlockState state, World level, BlockPos pos) {
 		ImmutableList.Builder<ItemStack> tools = ImmutableList.builder();
 		for (ToolType handler : ToolTypeRegistryImpl.registeredTypes().values()) {
 			ToolResult result = handler.test(state, level, pos);
@@ -67,24 +71,24 @@ public class HarvestToolProvider implements IBlockComponentProvider, KeyedResour
 
 	@Override
 	public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-		Player player = accessor.getPlayer();
+		EntityPlayer player = accessor.getPlayer();
 		if (!config.get(JadeIds.MC_HARVEST_TOOL_CREATIVE) && (player.isCreative() || player.isSpectator())) {
 			return;
 		}
-		Level level = accessor.getLevel();
+		World level = accessor.getLevel();
 		BlockPos pos = accessor.getPosition();
 		GameType gameType = ClientProxy.getGameMode();
-		if (gameType == GameType.ADVENTURE && player.blockActionRestricted(level, pos, gameType)) {
+		if (gameType == GameType.ADVENTURE && !player.isAllowEdit()) {
+			// 1.12.2: Player#blockActionRestricted is represented by allowEdit capabilities.
 			return;
 		}
-		BlockState state = accessor.getBlockState();
+		IBlockState state = accessor.getBlockState();
 		try {
-			if (state.getDestroyProgress(player, level, pos) <= 0) {
+			if (state.getPlayerRelativeBlockHardness(player, level, pos) <= 0) {
 				if (!accessor.isServersideContent() && config.get(JadeIds.MC_SHOW_UNBREAKABLE)) {
-					Component text = IThemeHelper.get().failure(Component.translatable("jade.harvest_tool.unbreakable"));
+					ITextComponent text = IThemeHelper.get().failure(new TextComponentTranslation("jade.harvest_tool.unbreakable"));
 					tooltip.add(JadeUI.text(text).narration(""));
 				}
-				//TODO: high priority handlers?
 				return;
 			}
 		} catch (Exception ignored) {
@@ -105,18 +109,19 @@ public class HarvestToolProvider implements IBlockComponentProvider, KeyedResour
 	}
 
 	public List<Element> getText(BlockAccessor accessor, IPluginConfig config) {
-		BlockState state = accessor.getBlockState();
-		if (!state.requiresCorrectToolForDrops() && !config.get(JadeIds.MC_EFFECTIVE_TOOL)) {
-			return List.of();
+		IBlockState state = accessor.getBlockState();
+		boolean needsTool = !state.getMaterial().isToolNotRequired();
+		if (!needsTool && !config.get(JadeIds.MC_EFFECTIVE_TOOL)) {
+			return Collections.emptyList();
 		}
-		List<ItemStack> tools = List.of();
+		List<ItemStack> tools = Collections.emptyList();
 		try {
 			tools = resultCache.get(state, () -> getTool(state, accessor.getLevel(), accessor.getPosition()));
 		} catch (ExecutionException e) {
 			Jade.LOGGER.error("Failed to get harvest tool", e);
 		}
 		if (tools.isEmpty()) {
-			return List.of();
+			return Collections.emptyList();
 		}
 
 		int offsetY = -3;
@@ -127,26 +132,21 @@ public class HarvestToolProvider implements IBlockComponentProvider, KeyedResour
 		}
 
 		if (!elements.isEmpty()) {
-			elements.addFirst(JadeUI.spacer(newLine ? -2 : 5, newLine ? 10 : 0).flexGrow(1000));
-			Player player = accessor.getPlayer();
+			// 1.12.2: no List#addFirst in the Java 8 collection API.
+			elements.add(0, JadeUI.spacer(newLine ? -2 : 5, newLine ? 10 : 0).flexGrow(1000));
+			EntityPlayer player = accessor.getPlayer();
 			boolean canHarvest = CommonProxy.isCorrectToolForDrops(state, player, accessor.getLevel(), accessor.getPosition());
-			if (state.requiresCorrectToolForDrops() || !canHarvest) {
+			if (needsTool || !canHarvest) {
 				IThemeHelper t = IThemeHelper.get();
-				Component text = canHarvest ? t.success(CHECK) : t.danger(X);
+				ITextComponent text = canHarvest ? t.success(CHECK) : t.danger(X);
 				elements.add(JadeUI.text(text)
 						.scale(0.75F)
 						.size(0, 0)
-						.offset(-3, 6 + offsetY)
-				);
+						.offset(-3, 6 + offsetY));
 			}
 		}
 
 		return elements;
-	}
-
-	@Override
-	public void onResourceManagerReload(ResourceManager resourceManager) {
-		invalidateCache();
 	}
 
 	public void invalidateCache() {
@@ -159,7 +159,7 @@ public class HarvestToolProvider implements IBlockComponentProvider, KeyedResour
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_HARVEST_TOOL;
 	}
 

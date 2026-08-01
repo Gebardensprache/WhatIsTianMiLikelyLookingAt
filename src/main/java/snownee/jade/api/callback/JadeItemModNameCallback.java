@@ -2,7 +2,7 @@ package snownee.jade.api.callback;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.item.ItemStack;
 
 /**
  * Allows addons to override the mod name shown for an item.

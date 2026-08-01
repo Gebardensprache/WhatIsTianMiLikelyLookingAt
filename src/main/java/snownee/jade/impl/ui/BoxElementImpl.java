@@ -3,25 +3,17 @@ package snownee.jade.impl.ui;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Consumer;
+import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.mojang.blaze3d.platform.Window;
 
 import it.unimi.dsi.fastutil.floats.FloatConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Renderable;
-import net.minecraft.client.gui.components.events.ContainerEventHandler;
-import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.client.gui.layouts.Layout;
-import net.minecraft.client.gui.layouts.LayoutElement;
-import net.minecraft.client.gui.layouts.LayoutSettings;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
 import snownee.jade.JadeInternals;
 import snownee.jade.api.JadeIds;
 import snownee.jade.api.config.IWailaConfig;
@@ -31,12 +23,16 @@ import snownee.jade.api.ui.BoxStyle;
 import snownee.jade.api.ui.Element;
 import snownee.jade.api.ui.IDisplayHelper;
 import snownee.jade.api.ui.JadeUI;
+import snownee.jade.api.ui.Layout;
+import snownee.jade.api.ui.LayoutElement;
 import snownee.jade.api.ui.MessageType;
 import snownee.jade.api.ui.Rect2f;
+import snownee.jade.api.ui.Renderable;
 import snownee.jade.api.ui.ResizeableElement;
 import snownee.jade.api.ui.ScreenDirection;
 import snownee.jade.api.ui.TooltipAnimation;
 import snownee.jade.gui.JadeLinearLayout;
+import snownee.jade.gui.LayoutSettings;
 import snownee.jade.gui.LayoutWithPadding;
 import snownee.jade.gui.PreviewOptionsScreen;
 import snownee.jade.gui.ResizeableLayout;
@@ -46,13 +42,30 @@ import snownee.jade.util.ClientProxy;
 import snownee.jade.util.ToFloatFunction;
 import snownee.jade.util.WailaExceptionHandler;
 
-public class BoxElementImpl extends BoxElement implements ContainerEventHandler {
+/**
+ * 1.12.2: the following modern features are dropped from this class:
+ * <ul>
+ *   <li>{@code implements ContainerEventHandler} and its 5 no-op methods ({@code children},
+ *       {@code isDragging}, {@code setDragging}, {@code getFocused}, {@code setFocused}) --
+ *       confirmed to have zero external callers in the translated codebase.</li>
+ *   <li>{@code visitWidgets(Consumer<AbstractWidget>)} -- no 1.12.2 layout-target exists</li>
+ *   <li>{@code GuiGraphicsExtractor} parameter dropped from {@code extractRenderState} and
+ *       {@code renderDebug} per the backport convention</li>
+ *   <li>Scissor clipping ({@code graphics.enableScissor/disableScissor}) dropped -- 1.12.2's GL
+ *       scissor does not auto-transform from the layout's local coordinate space.</li>
+ *   <li>Widget-alpha propagation ({@code setWidgetAlpha}) is a no-op; global alpha is already
+ *       applied by every draw helper via {@link IDisplayHelper#opacity()}.</li>
+ *   <li>{@code sneakyDetails} rendering (line ~192) references the parked
+ *       {@code api/theme/SneakyDetails} class -- the {@code GuiGraphicsExtractor} argument is
+ *       dropped but the remaining reference will not compile until {@code api/theme/} is
+ *       translated (B9; tracked as out-of-scope breakage per Rule 0).</li>
+ * </ul>
+ */
+public class BoxElementImpl extends BoxElement {
 	public LayoutWithPadding layout;
 	private final Tooltip tooltip;
 	private final BoxStyle style;
 	private final List<Renderable> renderables;
-	private @Nullable List<AbstractWidget> widgets;
-	private @Nullable List<GuiEventListener> eventListeners;
 	private @Nullable Element icon;
 	private float boxProgress;
 	private @Nullable MessageType boxProgressType;
@@ -87,7 +100,7 @@ public class BoxElementImpl extends BoxElement implements ContainerEventHandler 
 			}
 			LayoutSettings lineSettings = linearLayout.newChildLayoutSettings(lineLayout);
 			if (line.settings != null) {
-				lineSettings = line.settings.apply(lineSettings);
+				lineSettings = (LayoutSettings) line.settings.apply(lineSettings);
 			}
 			linearLayout.addChild(
 					lineLayout, lineSettings, container -> {
@@ -163,7 +176,7 @@ public class BoxElementImpl extends BoxElement implements ContainerEventHandler 
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+	public void extractRenderState(int mouseX, int mouseY, float partialTicks) {
 		if (tooltip.isEmpty()) {
 			return;
 		}
@@ -175,149 +188,154 @@ public class BoxElementImpl extends BoxElement implements ContainerEventHandler 
 			alpha *= IWailaConfig.get().overlay().getAlpha();
 		}
 		if (alpha > 0) {
-			style.render(graphics, this, getX(), getY(), getWidth(), getHeight(), alpha);
+			style.render(this, getX(), getY(), getWidth(), getHeight(), alpha);
 		}
 
-		graphics.enableScissor(getX(), getY(), getX() + getWidth(), getY() + getHeight());
+		// 1.12.2: scissor clipping (graphics.enableScissor/disableScissor) dropped --
+		// GuiGraphicsExtractor's local-to-screen transform is not available here
 		for (Renderable renderable : renderables) {
 			try {
-				renderable.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+				renderable.extractRenderState(mouseX, mouseY, partialTicks);
 			} catch (Exception e) {
 				WailaExceptionHandler.handleErr(e, null, null);
-				IDisplayHelper.get().drawBorder(graphics, ((LayoutElement) renderable).getRectangle(), 1, 0x88FF0000, true);
+				IDisplayHelper.get().drawBorder(((LayoutElement) renderable).getRectangle(), 1, 0x88FF0000, true);
 			}
 		}
-		graphics.disableScissor();
+
+		// 1.12.2: no scissor disable needed
 
 		if (root && tooltip.sneakyDetails) {
-			IThemeHelper.get().theme().sneakyDetails.render(graphics, partialTicks, this);
+			// 1.12.2: api/theme/SneakyDetails is parked (Rule 0); the GuiGraphicsExtractor parameter
+			// is dropped from this call site but the reference will not compile until B9 translates
+			// that package. Left as an intentionally unresolved out-of-scope error.
+			IThemeHelper.get().theme().sneakyDetails.render(partialTicks, this);
 		}
 	}
 
 	@Override
-	public void renderDebug(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks, RenderDebugContext context) {
-		super.renderDebug(graphics, mouseX, mouseY, partialTicks, context);
+	public void renderDebug(int mouseX, int mouseY, float partialTicks, RenderDebugContext context) {
+		super.renderDebug(mouseX, mouseY, partialTicks, context);
 		if (!context.renderChildren) {
 			return;
 		}
 		JadeUI.visitChildrenRecursive(
 				layout, layoutElement -> {
 					if (layoutElement instanceof Element element) {
-						element.renderDebug(graphics, mouseX, mouseY, partialTicks, context);
+						element.renderDebug(mouseX, mouseY, partialTicks, context);
 					} else if (layoutElement instanceof Layout) {
-						JadeInternals.getDisplayHelper().drawBorder(graphics, layoutElement.getRectangle(), 1, 0x8800FF00, true);
+						JadeInternals.getDisplayHelper().drawBorder(layoutElement.getRectangle(), 1, 0x8800FF00, true);
 					}
 				});
 	}
 
 	//	@Override
-//	public void render(GuiGraphicsExtractor guiGraphics, final float x, final float y, final float maxX, final float maxY) {
-//		if (tooltip.isEmpty()) {
-//			return;
-//		}
-//		guiGraphics.pose().pushMatrix();
-//		guiGraphics.pose().translate(x, y);
-//
-//		// render background
-//		float alpha = IDisplayHelper.get().opacity();
-//		if (JadeIds.ROOT.equals(getTag())) {
-//			alpha *= IWailaConfig.get().overlay().getAlpha();
-//		}
-//		if (alpha > 0) {
-//			style.render(guiGraphics, this, 0, 0, maxX - x, maxY - y, alpha);
-//		}
-//
-//		int borderWidth = style.borderWidth();
-//		// render box progress
-//		if (boxProgressType != null) {
-//			float left = style.boxProgressOffset(ScreenDirection.LEFT) + borderWidth;
-//			float width = maxX - x - left;
-//			float top = maxY - y - 1 + style.boxProgressOffset(ScreenDirection.UP) + borderWidth;
-//			float height = 1 + style.boxProgressOffset(ScreenDirection.DOWN);
-//			float progress = boxProgress;
-//			if (track == null && tag != null) {
-//				track = WailaTickHandler.instance().progressTracker.getOrCreate(
-//						tag, ProgressTrackInfo.class, () -> {
-//							return new ProgressTrackInfo(false, boxProgress, 0);
-//						});
-//			}
-//			if (track != null) {
-//				track.setProgress(progress);
-//				track.update(Minecraft.getInstance().getDeltaTracker().getRealtimeDeltaTicks());
-//				progress = track.getSmoothProgress();
-//			}
-//			((DisplayHelper) IDisplayHelper.get()).drawGradientProgress(
-//					guiGraphics,
-//					left,
-//					top,
-//					width,
-//					height,
-//					progress,
-//					style.boxProgressColors.get(boxProgressType));
-//		}
-//
-//		float contentLeft = padding(ScreenDirection.LEFT) + borderWidth;
-//		float contentTop = padding(ScreenDirection.UP) + borderWidth;
-//
-//		// render icon
-//		if (icon != null) {
-//			Vec2 iconSize = icon.getCachedSize();
-//			Vec2 offset = icon.getTranslation();
-//			float offsetY = offset.y;
-//			float min = contentTop + padding(ScreenDirection.DOWN) + iconSize.y;
-//			IWailaConfig.IconMode iconMode = IWailaConfig.get().overlay().getIconMode();
-//			if (iconMode == IWailaConfig.IconMode.TOP && min < getCachedSize().y) {
-//				offsetY += contentTop;
-//			} else {
-//				offsetY += (size.y - iconSize.y) / 2;
-//			}
-//			float offsetX = contentLeft + offset.x;
-//			icon.render(guiGraphics, offsetX, offsetY, offsetX + iconSize.x, offsetY + iconSize.y);
-//			contentLeft += iconSize.x + 3;
-//		}
-//
-//		// render elements
-//		{
-//			boolean fancy = Minecraft.getInstance().options.graphicsMode().get() != GraphicsStatus.FAST;
-//			if (fancy) {
-//				guiGraphics.enableScissor(0, 0, (int) (maxX - x), (int) (maxY - y));
-//			}
-//			float lineTop = contentTop;
-//			int lineCount = tooltip.lines.size();
-//			Tooltip.Line line = tooltip.lines.getFirst();
-//			for (int i = 0; i < lineCount; i++) {
-//				Vec2 lineSize = line.size();
-//				line.render(guiGraphics, contentLeft, lineTop, maxX - x - padding(ScreenDirection.RIGHT), lineTop + lineSize.y);
-//				if (i < lineCount - 1) {
-//					int marginBottom = line.marginBottom;
-//					line = tooltip.lines.get(i + 1);
-//					lineTop += lineSize.y + calculateMargin(marginBottom, line.marginTop);
-//				}
-//			}
-//			if (fancy) {
-//				guiGraphics.disableScissor();
-//			}
-//		}
-//
-//		// render down arrow
-//		if (tooltip.sneakyDetails) {
-//			float arrowTop = (OverlayRenderer.ticks / 5) % 8 - 2;
-//			if (arrowTop <= 4) {
-//				alpha = 1 - Math.abs(arrowTop) / 2;
-//				if (alpha > 0.016) {
-//					guiGraphics.pose().pushMatrix();
-//					arrowTop += size.y - 6;
-//					float arrowLeft = contentLeft + (contentSize.x - DisplayHelper.font().width("▾") + 1) / 2f;
-//					guiGraphics.pose().translate(arrowLeft, arrowTop);
-//					int color = Overlay.applyAlpha(IThemeHelper.get().theme().text.colors().info(), alpha);
-//					DisplayHelper.INSTANCE.drawText(guiGraphics, "▾", 0, 0, color);
-//					guiGraphics.pose().popMatrix();
-//				}
-//			}
-//		}
-//
-//		guiGraphics.pose().popMatrix();
-//	}
+	//	public void render(GuiGraphicsExtractor guiGraphics, final float x, final float y, final float maxX, final float maxY) {
+	//		if (tooltip.isEmpty()) {
+	//			return;
+	//		}
+	//		guiGraphics.pose().pushMatrix();
+	//		guiGraphics.pose().translate(x, y);
+	//
+	//		// render background
+	//		float alpha = IDisplayHelper.get().opacity();
+	//		if (JadeIds.ROOT.equals(getTag())) {
+	//			alpha *= IWailaConfig.get().overlay().getAlpha();
+	//		}
+	//		if (alpha > 0) {
+	//			style.render(guiGraphics, this, 0, 0, maxX - x, maxY - y, alpha);
+	//		}
+	//
+	//		int borderWidth = style.borderWidth();
+	//		// render box progress
+	//		if (boxProgressType != null) {
+	//			float left = style.boxProgressOffset(ScreenDirection.LEFT) + borderWidth;
+	//			float width = maxX - x - left;
+	//			float top = maxY - y - 1 + style.boxProgressOffset(ScreenDirection.UP) + borderWidth;
+	//			float height = 1 + style.boxProgressOffset(ScreenDirection.DOWN);
+	//			float progress = boxProgress;
+	//			if (track == null && tag != null) {
+	//				track = WailaTickHandler.instance().progressTracker.getOrCreate(
+	//						tag, ProgressTrackInfo.class, () -> {
+	//							return new ProgressTrackInfo(false, boxProgress, 0);
+	//						});
+	//			}
+	//			if (track != null) {
+	//				track.setProgress(progress);
+	//				track.update(Minecraft.getInstance().getDeltaTracker().getRealtimeDeltaTicks());
+	//				progress = track.getSmoothProgress();
+	//			}
+	//			((DisplayHelper) IDisplayHelper.get()).drawGradientProgress(
+	//					guiGraphics,
+	//					left,
+	//					top,
+	//					width,
+	//					height,
+	//					progress,
+	//					style.boxProgressColors.get(boxProgressType));
+	//		}
+	//
+	//		float contentLeft = padding(ScreenDirection.LEFT) + borderWidth;
+	//		float contentTop = padding(ScreenDirection.UP) + borderWidth;
+	//
+	//		// render icon
+	//		if (icon != null) {
+	//			Vec2 iconSize = icon.getCachedSize();
+	//			Vec2 offset = icon.getTranslation();
+	//			float offsetY = offset.y;
+	//			float min = contentTop + padding(ScreenDirection.DOWN) + iconSize.y;
+	//			IWailaConfig.IconMode iconMode = IWailaConfig.get().overlay().getIconMode();
+	//			if (iconMode == IWailaConfig.IconMode.TOP && min < getCachedSize().y) {
+	//				offsetY += contentTop;
+	//			} else {
+	//				offsetY += (size.y - iconSize.y) / 2;
+	//			}
+	//			float offsetX = contentLeft + offset.x;
+	//			icon.render(guiGraphics, offsetX, offsetY, offsetX + iconSize.x, offsetY + iconSize.y);
+	//			contentLeft += iconSize.x + 3;
+	//		}
+	//
+	//		// render elements
+	//		{
+	//			boolean fancy = Minecraft.getInstance().options.graphicsMode().get() != GraphicsStatus.FAST;
+	//			if (fancy) {
+	//				guiGraphics.enableScissor(0, 0, (int) (maxX - x), (int) (maxY - y));
+	//			}
+	//			float lineTop = contentTop;
+	//			int lineCount = tooltip.lines.size();
+	//			Tooltip.Line line = tooltip.lines.getFirst();
+	//			for (int i = 0; i < lineCount; i++) {
+	//				Vec2 lineSize = line.size();
+	//				line.render(guiGraphics, contentLeft, lineTop, maxX - x - padding(ScreenDirection.RIGHT), lineTop + lineSize.y);
+	//				if (i < lineCount - 1) {
+	//					int marginBottom = line.marginBottom;
+	//					line = tooltip.lines.get(i + 1);
+	//					lineTop += lineSize.y + calculateMargin(marginBottom, line.marginTop);
+	//				}
+	//			}
+	//			if (fancy) {
+	//				guiGraphics.disableScissor();
+	//			}
+	//		}
+	//
+	//		// render down arrow
+	//		if (tooltip.sneakyDetails) {
+	//			float arrowTop = (OverlayRenderer.ticks / 5) % 8 - 2;
+	//			if (arrowTop <= 4) {
+	//				alpha = 1 - Math.abs(arrowTop) / 2;
+	//				if (alpha > 0.016) {
+	//					guiGraphics.pose().pushMatrix();
+	//					arrowTop += size.y - 6;
+	//					float arrowLeft = contentLeft + (contentSize.x - DisplayHelper.font().width("▾") + 1) / 2f;
+	//					guiGraphics.pose().translate(arrowLeft, arrowTop);
+	//					int color = Overlay.applyAlpha(IThemeHelper.get().theme().text.colors().info(), alpha);
+	//					DisplayHelper.INSTANCE.drawText(guiGraphics, "▾", 0, 0, color);
+	//					guiGraphics.pose().popMatrix();
+	//				}
+	//			}
+	//		}
+	//
+	//		guiGraphics.pose().popMatrix();
+	//	}
 
 	@Override
 	public Tooltip getTooltip() {
@@ -352,16 +370,16 @@ public class BoxElementImpl extends BoxElement implements ContainerEventHandler 
 	}
 
 	public void updateExpectedRect(TooltipAnimation animation) {
-		Window window = Minecraft.getInstance().getWindow();
+		ScaledResolution resolution = new ScaledResolution(Minecraft.getMinecraft());
 		IWailaConfig.Overlay overlay = IWailaConfig.get().overlay();
 		IWailaConfig.Accessibility accessibility = IWailaConfig.get().accessibility();
-		float x = window.getGuiScaledWidth() * accessibility.tryFlip(overlay.getOverlayPosX());
-		float y = window.getGuiScaledHeight() * (1.0F - overlay.getOverlayPosY());
+		float x = resolution.getScaledWidth() * accessibility.tryFlip(overlay.getOverlayPosX());
+		float y = resolution.getScaledHeight() * (1.0F - overlay.getOverlayPosY());
 		float width = layout.getWidth();
 		float height = layout.getHeight();
 
 		animation.scale = overlay.getOverlayScale();
-		float thresholdHeight = window.getGuiScaledHeight() * overlay.getAutoScaleThreshold();
+		float thresholdHeight = resolution.getScaledHeight() * overlay.getAutoScaleThreshold();
 		if (!JadeUI.isPinned() && layout.getHeight() * animation.scale > thresholdHeight) {
 			animation.scale = Math.max(animation.scale * 0.5f, thresholdHeight / layout.getHeight());
 		}
@@ -383,6 +401,16 @@ public class BoxElementImpl extends BoxElement implements ContainerEventHandler 
 			if (bossBarRect != null && bossBarRect.intersects(expectedRect)) {
 				expectedRect.setY(bossBarRect.getY() + bossBarRect.getHeight());
 			}
+		}
+
+		// 1.12.2: keep the tooltip frame on screen. BoxStyle.render expands the
+		// background/frame by 9px on each side, so a box whose top sits at y=0 (the
+		// default anchorY=0 / overlayPosY=1.0 position) has its rounded top edge
+		// clipped off the top of the screen. Nudge it down to the frame inset. This is
+		// a documented divergence from the modern source tree (which does not clamp);
+		// position-adjustment mode above is unaffected.
+		if (expectedRect.getY() < 9) {
+			expectedRect.setY(9);
 		}
 	}
 
@@ -422,7 +450,7 @@ public class BoxElementImpl extends BoxElement implements ContainerEventHandler 
 	}
 
 	@Override
-	public @Nullable Component getNarration() {
+	public @Nullable ITextComponent getNarration() {
 		if (tooltip.isEmpty()) {
 			return null;
 		}
@@ -430,7 +458,7 @@ public class BoxElementImpl extends BoxElement implements ContainerEventHandler 
 		if (narration.isEmpty()) {
 			return null;
 		}
-		return Component.literal(narration);
+		return new TextComponentString(narration);
 	}
 
 	@Override
@@ -440,51 +468,42 @@ public class BoxElementImpl extends BoxElement implements ContainerEventHandler 
 		this.height = layout.getHeight();
 	}
 
-	@Override
-	public void visitWidgets(Consumer<AbstractWidget> consumer) {
-		layout.visitWidgets(consumer);
-	}
+	/**
+	 * 1.12.2: no {@code AbstractWidget} hierarchy exists to visit (Jade's own {@link LayoutElement}
+	 * does not have {@code visitWidgets}). This method is dropped.
+	 */
 
+	/**
+	 * 1.12.2: widget alpha is handled globally via {@link IDisplayHelper#opacity()}, which already
+	 * returns {@code OverlayRenderer.animation.alpha}. No local widget-alpha propagation is needed.
+	 * Kept as a no-op stub for the {@code OverlayRenderer.renderOverlay} call site.
+	 */
 	public void setWidgetAlpha(float alpha) {
-		if (widgets == null) {
-			ImmutableList.Builder<AbstractWidget> builder = ImmutableList.builder();
-			visitWidgets(builder::add);
-			widgets = builder.build();
-		}
-		for (AbstractWidget widget : widgets) {
-			widget.setAlpha(alpha);
-		}
 	}
 
-	@Override
-	public List<? extends GuiEventListener> children() {
-		if (eventListeners == null) {
-			ImmutableList.Builder<GuiEventListener> builder = ImmutableList.builder();
-			for (Renderable renderable : renderables) {
-				if (renderable instanceof GuiEventListener listener) {
-					builder.add(listener);
+	/**
+	 * Finds the innermost renderable {@link LayoutElement} at the given local coordinates.
+	 * <p>
+	 * 1.12.2: replaces the {@code ContainerEventHandler.getChildAt(double, double)} contract
+	 * from the modern code. Walks the {@link #renderables} list in reverse (topmost first) and
+	 * returns the first hit. Called from {@link snownee.jade.overlay.OverlayRenderer} and
+	 * {@link snownee.jade.gui.PinScreen} for debug-overlay and copy-to-clipboard interactions.
+	 *
+	 * @param mouseX mapped mouse X (local tooltip coordinates)
+	 * @param mouseY mapped mouse Y (local tooltip coordinates)
+	 * @return an {@link Optional} containing the topmost {@link LayoutElement} at the given
+	 *         coordinates, or empty if no child contains the point
+	 */
+	public Optional<LayoutElement> getChildAt(double mouseX, double mouseY) {
+		for (int i = renderables.size() - 1; i >= 0; i--) {
+			Renderable renderable = renderables.get(i);
+			if (renderable instanceof LayoutElement layoutElement) {
+				if (mouseX >= layoutElement.getX() && mouseX < layoutElement.getX() + layoutElement.getWidth()
+						&& mouseY >= layoutElement.getY() && mouseY < layoutElement.getY() + layoutElement.getHeight()) {
+					return Optional.of(layoutElement);
 				}
 			}
-			eventListeners = builder.build();
 		}
-		return eventListeners;
-	}
-
-	@Override
-	public boolean isDragging() {
-		return false;
-	}
-
-	@Override
-	public void setDragging(boolean bl) {
-	}
-
-	@Override
-	public @Nullable GuiEventListener getFocused() {
-		return null;
-	}
-
-	@Override
-	public void setFocused(@Nullable GuiEventListener guiEventListener) {
+		return Optional.empty();
 	}
 }

@@ -3,8 +3,8 @@ package snownee.jade.addon.core;
 import com.google.common.base.Objects;
 import com.google.common.base.Strings;
 
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IBlockComponentProvider;
@@ -70,7 +70,7 @@ public abstract class ModNameProvider implements IToggleableProvider {
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.CORE_MOD_NAME;
 	}
 

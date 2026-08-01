@@ -1,26 +1,48 @@
 package snownee.jade.network;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.util.Objects;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.client.Minecraft;
+import net.minecraft.nbt.CompressedStreamTools;
+import net.minecraft.nbt.NBTBase;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.PacketBuffer;
+import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
+import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
+import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import snownee.jade.Jade;
 import snownee.jade.JadeClient;
-import snownee.jade.api.JadeIds;
+import snownee.jade.api.DataCodec;
 
-public record ReceiveDataPacket(CompoundTag tag) implements CustomPacketPayload {
+public class ReceiveDataPacket implements IMessage {
 	public static final int MAX_SIZE = 16 * 1024;
-	public static final Type<ReceiveDataPacket> TYPE = new Type<>(JadeIds.PACKET_RECEIVE_DATA);
-	public static final StreamCodec<FriendlyByteBuf, ReceiveDataPacket> CODEC = StreamCodec.composite(
-			ByteBufCodecs.COMPOUND_TAG,
-			ReceiveDataPacket::tag,
-			ReceiveDataPacket::new
-	);
 	private static int spamCount;
+
+	private NBTTagCompound tag;
+
+	public ReceiveDataPacket() {
+	}
+
+	public ReceiveDataPacket(NBTTagCompound tag) {
+		this.tag = tag;
+	}
+
+	public NBTTagCompound tag() {
+		return tag;
+	}
+
+	@Override
+	public void fromBytes(ByteBuf buf) {
+		tag = DataCodec.readTag(new PacketBuffer(buf));
+	}
+
+	@Override
+	public void toBytes(ByteBuf buf) {
+		new PacketBuffer(buf).writeCompoundTag(tag);
+	}
 
 	public static void handle(ReceiveDataPacket message, ClientPayloadContext context) {
 		context.execute(() -> {
@@ -28,13 +50,8 @@ public record ReceiveDataPacket(CompoundTag tag) implements CustomPacketPayload 
 		});
 	}
 
-	@Override
-	public Type<? extends CustomPacketPayload> type() {
-		return TYPE;
-	}
-
-	public static void send(CompoundTag tag, ServerPayloadContext context) {
-		int size = tag.sizeInBytes();
+	public static void send(NBTTagCompound tag, ServerPayloadContext context) {
+		int size = sizeInBytes(tag);
 		if (size > MAX_SIZE) {
 			if (spamCount++ < 1) {
 				Jade.LOGGER.debug("Data size is too large: {}, max: {}, data: {}", size, MAX_SIZE, tag);
@@ -45,18 +62,49 @@ public record ReceiveDataPacket(CompoundTag tag) implements CustomPacketPayload 
 					return;
 				}
 				removeLargest(tag, 0, 1);
-			} while (tag.sizeInBytes() > MAX_SIZE);
+			} while (sizeInBytes(tag) > MAX_SIZE);
 		}
 		context.sendPacket(new ReceiveDataPacket(tag));
 	}
 
-	private static boolean removeLargest(CompoundTag tag, int depth, int maxDepth) {
+	/**
+	 * 1.12.2 replacement for the modern {@code Tag.sizeInBytes()}: serializes the tag
+	 * and measures the result.
+	 *
+	 * @param tag the tag to measure
+	 * @return the serialized size in bytes, or {@link Integer#MAX_VALUE} on failure
+	 */
+	private static int sizeInBytes(NBTTagCompound tag) {
+		try {
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			CompressedStreamTools.write(tag, new DataOutputStream(out));
+			return out.size();
+		} catch (Exception e) {
+			// Treat an unmeasurable tag as oversized so the caller trims it.
+			return Integer.MAX_VALUE;
+		}
+	}
+
+	/**
+	 * Measures a child tag by wrapping it in a compound and subtracting the wrapper cost.
+	 * Only relative ordering matters here, so an approximate size is sufficient.
+	 *
+	 * @param child the child tag to measure
+	 * @return the approximate serialized size in bytes
+	 */
+	private static int sizeInBytes(NBTBase child) {
+		NBTTagCompound wrapper = new NBTTagCompound();
+		wrapper.setTag("", child);
+		return sizeInBytes(wrapper);
+	}
+
+	private static boolean removeLargest(NBTTagCompound tag, int depth, int maxDepth) {
 		int largestSize = 0;
 		String largestKey = null;
-		Tag largestValue = null;
-		for (String key : tag.keySet()) {
-			Tag childTag = Objects.requireNonNull(tag.get(key));
-			int size = childTag.sizeInBytes();
+		NBTBase largestValue = null;
+		for (String key : tag.getKeySet()) {
+			NBTBase childTag = Objects.requireNonNull(tag.getTag(key));
+			int size = sizeInBytes(childTag);
 			if (size > largestSize) {
 				largestSize = size;
 				largestKey = key;
@@ -66,13 +114,21 @@ public record ReceiveDataPacket(CompoundTag tag) implements CustomPacketPayload 
 		if (largestKey == null) {
 			return false;
 		}
-		if (depth < maxDepth && largestValue instanceof CompoundTag) {
-			if (!removeLargest((CompoundTag) largestValue, depth + 1, maxDepth)) {
-				tag.remove(largestKey);
+		if (depth < maxDepth && largestValue instanceof NBTTagCompound) {
+			if (!removeLargest((NBTTagCompound) largestValue, depth + 1, maxDepth)) {
+				tag.removeTag(largestKey);
 			}
 		} else {
-			tag.remove(largestKey);
+			tag.removeTag(largestKey);
 		}
 		return true;
+	}
+
+	public static class Handler implements IMessageHandler<ReceiveDataPacket, IMessage> {
+		@Override
+		public IMessage onMessage(ReceiveDataPacket message, MessageContext ctx) {
+			handle(message, ClientPayloadContext.of(Minecraft.getMinecraft()));
+			return null;
+		}
 	}
 }

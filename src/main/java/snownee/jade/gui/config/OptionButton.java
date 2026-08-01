@@ -2,30 +2,25 @@ package snownee.jade.gui.config;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.util.text.ITextComponent;
 
 public class OptionButton extends OptionsList.Entry {
 
-	public OptionButton(String titleKey, @Nullable Button button) {
+	public OptionButton(String titleKey, @Nullable GuiButton button) {
 		this(makeTitle(titleKey), button);
 	}
 
-	public OptionButton(Component title, @Nullable Button button) {
+	public OptionButton(ITextComponent title, @Nullable GuiButton button) {
 		super(title);
 		if (button != null) {
-			if (button.getMessage().getString().isEmpty()) {
-				button.setMessage(title);
+			if (button.displayString.isEmpty()) {
+				button.displayString = title.getFormattedText();
 			} else {
-				addMessage(button.getMessage().getString());
+				addMessage(button.displayString);
 			}
-			addWidget(button, 0);
+			addWidget(new JadeWidget.Button(button), 0);
 		}
-	}
-
-	public OptionButton(Component title, Button.Builder builder) {
-		this(title, builder.createNarration($ -> CommonComponents.joinForNarration(title, $.get())).build());
 	}
 
 }

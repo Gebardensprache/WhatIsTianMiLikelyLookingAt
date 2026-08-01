@@ -1,7 +1,6 @@
 package snownee.jade.api.config;
 
-import net.minecraft.core.HolderLookup;
-import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.ResourceLocation;
 
 /**
  * Tracks explicit hide/pick overrides for registry-backed targets.
@@ -12,10 +11,8 @@ import net.minecraft.resources.ResourceKey;
 public interface TargetOperationRepository<T, U> {
 	/**
 	 * Reloads repository state from registries.
-	 *
-	 * @param provider registry lookup provider
 	 */
-	void reload(HolderLookup.Provider provider);
+	void reload();
 
 	/**
 	 * Returns whether the given registry entry should be hidden.
@@ -23,7 +20,7 @@ public interface TargetOperationRepository<T, U> {
 	 * @param key registry key
 	 * @return {@code true} if the target should be hidden
 	 */
-	boolean shouldHide(ResourceKey<T> key);
+	boolean shouldHide(ResourceLocation key);
 
 	/**
 	 * Returns whether the given object should be hidden.
@@ -41,7 +38,7 @@ public interface TargetOperationRepository<T, U> {
 	 * @param key registry key
 	 * @return {@code true} if the target should be picked
 	 */
-	boolean shouldPick(ResourceKey<T> key);
+	boolean shouldPick(ResourceLocation key);
 
 	/**
 	 * Returns whether the given object should be selected.
@@ -58,14 +55,14 @@ public interface TargetOperationRepository<T, U> {
 	 *
 	 * @param key registry key
 	 */
-	void hide(ResourceKey<T> key);
+	void hide(ResourceLocation key);
 
 	/**
 	 * Marks a registry entry as preferred.
 	 *
 	 * @param key registry key
 	 */
-	void pick(ResourceKey<T> key);
+	void pick(ResourceLocation key);
 
 	/**
 	 * Maps a runtime object back to its registry key.
@@ -73,5 +70,5 @@ public interface TargetOperationRepository<T, U> {
 	 * @param obj runtime object
 	 * @return the corresponding registry key
 	 */
-	ResourceKey<T> map(U obj);
+	ResourceLocation map(U obj);
 }

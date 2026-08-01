@@ -8,27 +8,27 @@ import org.jspecify.annotations.Nullable;
 
 import com.google.common.collect.Lists;
 
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.narration.NarratedElementType;
-import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.gui.narration.NarrationThunk;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.Style;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraft.util.text.event.HoverEvent;
 import snownee.jade.api.ui.JadeUI;
 import snownee.jade.gui.config.OptionsList;
 
 public abstract class OptionValue<T> extends OptionsList.Entry {
 
-	private static final Component SERVER_FEATURE = Component.literal("* ").withStyle(Style.EMPTY.withColor(ChatFormatting.GRAY)
-			.withHoverEvent(new HoverEvent.ShowText(Component.translatable("gui.jade.server_feature"))));
+	private static final ITextComponent SERVER_FEATURE = new TextComponentString("* ")
+			.setStyle(new Style().setColor(TextFormatting.GRAY)
+					.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new TextComponentTranslation("gui.jade.server_feature"))));
 	protected final Supplier<T> getter;
 	protected final Consumer<T> setter;
-	protected @Nullable Identifier id;
+	protected @Nullable ResourceLocation id;
 	protected T value;
 	protected int indent;
-	private Component rawTitle;
+	private ITextComponent rawTitle;
 
 	public OptionValue(String optionName, Supplier<T> getter, Consumer<T> setter) {
 		super(makeTitle(optionName));
@@ -38,7 +38,7 @@ public abstract class OptionValue<T> extends OptionsList.Entry {
 		addMessageKey(optionName);
 		String key = makeKey(optionName + "_desc");
 		if (JadeUI.hasTranslation(key)) {
-			appendDescription(Component.translatable(key));
+			appendDescription(new TextComponentTranslation(key));
 		}
 	}
 
@@ -46,7 +46,7 @@ public abstract class OptionValue<T> extends OptionsList.Entry {
 	public void setDisabled(boolean disabled) {
 		super.setDisabled(disabled);
 		if (disabled) {
-			setTitle(rawTitle.copy().withStyle(ChatFormatting.GRAY));
+			setTitle(rawTitle.createCopy().setStyle(new Style().setColor(TextFormatting.GRAY)));
 		} else {
 			setTitle(rawTitle);
 		}
@@ -56,26 +56,18 @@ public abstract class OptionValue<T> extends OptionsList.Entry {
 		setter.accept(value);
 	}
 
-	public void appendDescription(Component description) {
+	public void appendDescription(ITextComponent description) {
 		if (this.description.isEmpty()) {
 			this.description = Lists.newArrayList(description);
 		} else {
 			this.description.add(description);
 		}
-		addMessage(description.getString());
+		addMessage(description.getFormattedText());
 	}
 
 	@Override
 	public int getTextX() {
 		return indent + 10;
-	}
-
-	@Override
-	public void updateNarration(NarrationElementOutput output) {
-		super.updateNarration(output);
-		if (!description.isEmpty()) {
-			output.add(NarratedElementType.HINT, NarrationThunk.from(description));
-		}
 	}
 
 	public boolean isValidValue() {
@@ -95,23 +87,23 @@ public abstract class OptionValue<T> extends OptionsList.Entry {
 
 	public abstract void updateValue();
 
-	public void setId(Identifier id) {
+	public void setId(ResourceLocation id) {
 		this.id = id;
 	}
 
-	public @Nullable Identifier getId() {
+	public @Nullable ResourceLocation getId() {
 		return id;
 	}
 
 	@Override
-	public List<Component> getDescriptionOnShift() {
+	public List<ITextComponent> getDescriptionOnShift() {
 		if (id == null) {
 			return List.of();
 		}
-		return List.of(Component.literal(id.toString()).withStyle(ChatFormatting.GRAY));
+		return List.of(new TextComponentString(id.toString()).setStyle(new Style().setColor(TextFormatting.GRAY)));
 	}
 
 	public void setServerFeature() {
-		setTitle(title().copy().append(SERVER_FEATURE));
+		setTitle(title().createCopy().appendSibling(SERVER_FEATURE));
 	}
 }

@@ -1,10 +1,9 @@
 package snownee.jade.addon.debug;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.FireBlock;
-import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.block.Block;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextComponentTranslation;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -17,28 +16,30 @@ public class BlockPropertiesProvider implements IBlockComponentProvider {
 
 	@Override
 	public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-		BlockBehaviour.Properties properties = accessor.getBlock().properties();
 		IThemeHelper themes = IThemeHelper.get();
-		tooltip.add(Component.translatable("jade.block_destroy_time", themes.info(properties.destroyTime)));
-		tooltip.add(Component.translatable("jade.block_explosion_resistance", themes.info(properties.explosionResistance)));
-		if (properties.jumpFactor != 1) {
-			tooltip.add(Component.translatable("jade.block_jump_factor", themes.info(properties.jumpFactor)));
-		}
-		if (properties.speedFactor != 1) {
-			tooltip.add(Component.translatable("jade.block_speed_factor", themes.info(properties.speedFactor)));
-		}
-		int igniteOdds = ((FireBlock) Blocks.FIRE).getIgniteOdds(accessor.getBlockState());
+		// 1.12.2: no BlockBehaviour.Properties; read the effective values from the
+		// state (hardness is location-aware in 1.12.2). Unbreakable blocks return
+		// a negative value, same as the modern destroyTime of -1.
+		float destroyTime = accessor.getBlockState().getBlockHardness(accessor.getLevel(), accessor.getPosition());
+		tooltip.add(new TextComponentTranslation("jade.block_destroy_time", themes.info(destroyTime)));
+		// 1.12.2: explosion resistance is the raw resistance, not the modern
+		// resistance / 5.0F. No jumpFactor/speedFactor on 1.12.2 blocks.
+		tooltip.add(new TextComponentTranslation("jade.block_explosion_resistance", themes.info(accessor.getBlock().getExplosionResistance(accessor.getLevel(), accessor.getPosition(), null, null))));
+		// 1.12.2: no FireBlock.getIgniteOdds/getBurnOdds; the Forge
+		// location-aware methods on the block itself perform the same map lookup.
+		Block block = accessor.getBlock();
+		int igniteOdds = block.getFlammability(accessor.getLevel(), accessor.getPosition(), EnumFacing.UP);
 		if (igniteOdds != 0) {
-			tooltip.add(Component.translatable("jade.block_ignite_odds", themes.info(igniteOdds)));
+			tooltip.add(new TextComponentTranslation("jade.block_ignite_odds", themes.info(igniteOdds)));
 		}
-		int burnOdds = ((FireBlock) Blocks.FIRE).getBurnOdds(accessor.getBlockState());
+		int burnOdds = block.getFireSpreadSpeed(accessor.getLevel(), accessor.getPosition(), EnumFacing.UP);
 		if (burnOdds != 0) {
-			tooltip.add(Component.translatable("jade.block_burn_odds", themes.info(burnOdds)));
+			tooltip.add(new TextComponentTranslation("jade.block_burn_odds", themes.info(burnOdds)));
 		}
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.DEBUG_BLOCK_PROPERTIES;
 	}
 

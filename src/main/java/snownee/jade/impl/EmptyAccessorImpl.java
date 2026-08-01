@@ -6,20 +6,18 @@ import org.jspecify.annotations.Nullable;
 
 import com.google.common.base.Suppliers;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.world.World;
+import net.minecraft.util.math.RayTraceResult;
 import snownee.jade.api.AccessorImpl;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.EmptyAccessor;
 
-public class EmptyAccessorImpl extends AccessorImpl<BlockHitResult> implements EmptyAccessor {
+public class EmptyAccessorImpl extends AccessorImpl<RayTraceResult> implements EmptyAccessor {
 
 	private EmptyAccessorImpl(Builder builder) {
 		super(
@@ -38,7 +36,7 @@ public class EmptyAccessorImpl extends AccessorImpl<BlockHitResult> implements E
 	}
 
 	@Override
-	public boolean verifyData(CompoundTag data) {
+	public boolean verifyData(NBTTagCompound data) {
 		return true;
 	}
 
@@ -49,28 +47,28 @@ public class EmptyAccessorImpl extends AccessorImpl<BlockHitResult> implements E
 
 	public static class Builder implements EmptyAccessor.Builder {
 
-		private @Nullable Level level;
-		private @Nullable Player player;
-		private @Nullable CompoundTag serverData;
+		private @Nullable World level;
+		private @Nullable EntityPlayer player;
+		private @Nullable NBTTagCompound serverData;
 		private boolean connected;
 		private boolean showDetails;
-		private @Nullable BlockHitResult hit;
+		private @Nullable RayTraceResult hit;
 		private boolean verify;
 
 		@Override
-		public Builder level(Level level) {
+		public Builder level(World level) {
 			this.level = level;
 			return this;
 		}
 
 		@Override
-		public Builder player(Player player) {
+		public Builder player(EntityPlayer player) {
 			this.player = player;
 			return this;
 		}
 
 		@Override
-		public Builder serverData(@Nullable CompoundTag serverData) {
+		public Builder serverData(@Nullable NBTTagCompound serverData) {
 			this.serverData = serverData;
 			return this;
 		}
@@ -88,7 +86,7 @@ public class EmptyAccessorImpl extends AccessorImpl<BlockHitResult> implements E
 		}
 
 		@Override
-		public Builder hit(BlockHitResult hit) {
+		public Builder hit(RayTraceResult hit) {
 			this.hit = hit;
 			return this;
 		}
@@ -121,24 +119,31 @@ public class EmptyAccessorImpl extends AccessorImpl<BlockHitResult> implements E
 		}
 	}
 
-	public record SyncData(boolean showDetails, BlockHitResult hit, CompoundTag data) {
-		public static final StreamCodec<RegistryFriendlyByteBuf, SyncData> STREAM_CODEC = StreamCodec.composite(
-				ByteBufCodecs.BOOL,
-				SyncData::showDetails,
-				StreamCodec.of(FriendlyByteBuf::writeBlockHitResult, FriendlyByteBuf::readBlockHitResult),
-				SyncData::hit,
-				ByteBufCodecs.COMPOUND_TAG,
-				SyncData::data,
-				SyncData::new
-		);
+	public record SyncData(boolean showDetails, RayTraceResult hit, NBTTagCompound data) {
+		public static final DataCodec<SyncData> STREAM_CODEC = new DataCodec<>() {
+			@Override
+			public SyncData decode(PacketBuffer buf) {
+				boolean showDetails = buf.readBoolean();
+				RayTraceResult hit = BlockAccessorImpl.SyncData.readBlockHitResult(buf);
+				NBTTagCompound data = DataCodec.readTag(buf);
+				return new SyncData(showDetails, hit, data);
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, SyncData value) {
+				buf.writeBoolean(value.showDetails);
+				BlockAccessorImpl.SyncData.writeBlockHitResult(buf, value.hit);
+				buf.writeCompoundTag(value.data);
+			}
+		};
 
 		public SyncData(EmptyAccessor accessor) {
 			this(accessor.showDetails(), accessor.getHitResult(), accessor.getServerData());
 		}
 
-		public EmptyAccessor unpack(ServerPlayer player) {
+		public EmptyAccessor unpack(EntityPlayerMP player) {
 			return new Builder()
-					.level(player.level())
+					.level(player.getEntityWorld())
 					.player(player)
 					.showDetails(showDetails)
 					.hit(hit)

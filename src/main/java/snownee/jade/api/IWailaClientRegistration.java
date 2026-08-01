@@ -9,17 +9,16 @@ import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.ApiStatus.NonExtendable;
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponentType;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.LevelAccessor;
-import net.minecraft.world.level.block.Block;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityList;
+import net.minecraft.item.ItemStack;
+import net.minecraft.world.World;
+import net.minecraft.block.Block;
 import snownee.jade.api.callback.JadeAfterRenderCallback;
 import snownee.jade.api.callback.JadeBeforeRenderCallback;
 import snownee.jade.api.callback.JadeBeforeTooltipCollectCallback;
@@ -46,7 +45,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param key          configuration key
 	 * @param defaultValue default value
 	 */
-	void addConfig(Identifier key, boolean defaultValue);
+	void addConfig(ResourceLocation key, boolean defaultValue);
 
 	/**
 	 * Registers an enum plugin config key.
@@ -55,7 +54,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param defaultValue default value
 	 * @param <T>          enum type
 	 */
-	<T extends Enum<T>> void addConfig(Identifier key, T defaultValue);
+	<T extends Enum<T>> void addConfig(ResourceLocation key, T defaultValue);
 
 	/**
 	 * Registers a string plugin config key.
@@ -64,7 +63,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param defaultValue default value
 	 * @param validator    value validator
 	 */
-	void addConfig(Identifier key, String defaultValue, Predicate<String> validator);
+	void addConfig(ResourceLocation key, String defaultValue, Predicate<String> validator);
 
 	/**
 	 * Registers an integer plugin config key.
@@ -75,7 +74,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param max          maximum accepted value
 	 * @param slider       whether the UI should render a slider
 	 */
-	void addConfig(Identifier key, int defaultValue, int min, int max, boolean slider);
+	void addConfig(ResourceLocation key, int defaultValue, int min, int max, boolean slider);
 
 	/**
 	 * Registers a floating-point plugin config key.
@@ -86,7 +85,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param max          maximum accepted value
 	 * @param slider       whether the UI should render a slider
 	 */
-	void addConfig(Identifier key, float defaultValue, float min, float max, boolean slider);
+	void addConfig(ResourceLocation key, float defaultValue, float min, float max, boolean slider);
 
 	/**
 	 * Registers a listener for config changes.
@@ -94,7 +93,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param key      configuration key
 	 * @param listener callback invoked when the key changes
 	 */
-	void addConfigListener(Identifier key, Consumer<Identifier> listener);
+	void addConfigListener(ResourceLocation key, Consumer<ResourceLocation> listener);
 
 	/**
 	 * Overrides the display category for a config key.
@@ -103,7 +102,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param override override component
 	 */
 	@ApiStatus.Experimental
-	void setConfigCategoryOverride(Identifier key, Component override);
+	void setConfigCategoryOverride(ResourceLocation key, ITextComponent override);
 
 	/**
 	 * Overrides the display category for a config key.
@@ -112,7 +111,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param override override components
 	 */
 	@ApiStatus.Experimental
-	void setConfigCategoryOverride(Identifier key, List<Component> override);
+	void setConfigCategoryOverride(ResourceLocation key, List<ITextComponent> override);
 
 	/**
 	 * Register an {@link IComponentProvider} instance to allow overriding the icon for a block via the
@@ -175,14 +174,14 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param namespace namespace to query
 	 * @return registered keys
 	 */
-	Set<Identifier> getConfigKeys(String namespace);
+	Set<ResourceLocation> getConfigKeys(String namespace);
 
 	/**
 	 * Returns every registered config key.
 	 *
 	 * @return all config keys
 	 */
-	Set<Identifier> getConfigKeys();
+	Set<ResourceLocation> getConfigKeys();
 
 	/**
 	 * Returns whether a config key exists.
@@ -190,7 +189,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param key configuration key
 	 * @return {@code true} if the key is registered
 	 */
-	boolean hasConfig(Identifier key);
+	boolean hasConfig(ResourceLocation key);
 
 	/**
 	 * Registers a callback that runs after the overlay renders.
@@ -301,7 +300,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param jumpToCategory optional category to focus
 	 * @return configuration screen
 	 */
-	Screen createPluginConfigScreen(@Nullable Screen parent, @Nullable Component jumpToCategory);
+	GuiScreen createPluginConfigScreen(@Nullable GuiScreen parent, @Nullable ITextComponent jumpToCategory);
 
 	/**
 	 * Registers a client item storage provider.
@@ -357,14 +356,14 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 *
 	 * @return server data, or {@code null} if unavailable
 	 */
-	@Nullable CompoundTag getServerData();
+	@Nullable NBTTagCompound getServerData();
 
 	/**
 	 * Replaces the cached server data payload.
 	 *
 	 * @param tag server data
 	 */
-	void setServerData(CompoundTag tag);
+	void setServerData(NBTTagCompound tag);
 
 	/**
 	 * Returns the camouflage item stack for a block at the given position.
@@ -373,21 +372,21 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param pos   block position
 	 * @return camouflage item stack
 	 */
-	ItemStack getBlockCamouflage(LevelAccessor level, BlockPos pos);
+	ItemStack getBlockCamouflage(World level, BlockPos pos);
 
 	/**
 	 * Marks a feature as client-side, meaning it is fully available even if the server does not have Jade installed.
 	 *
 	 * @param uid feature identifier
 	 */
-	void markAsClientFeature(Identifier uid);
+	void markAsClientFeature(ResourceLocation uid);
 
 	/**
 	 * Marks a feature as server-side.
 	 *
 	 * @param uid feature identifier
 	 */
-	void markAsServerFeature(Identifier uid);
+	void markAsServerFeature(ResourceLocation uid);
 
 	/**
 	 * Returns whether a feature is fully available even if the server does not have Jade installed.
@@ -395,7 +394,7 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * @param uid feature identifier
 	 * @return {@code true} if the feature is client-side
 	 */
-	boolean isClientFeature(Identifier uid);
+	boolean isClientFeature(ResourceLocation uid);
 
 	/**
 	 * Registers a client handler for the given accessor type.
@@ -418,17 +417,17 @@ public interface IWailaClientRegistration extends PlatformWailaClientRegistratio
 	 * Registers a variant mapping for an entity type.
 	 *
 	 * @param entityType  entity type
-	 * @param variantType optional variant component type
+	 * @param variantType optional variant type object (1.12.2: not data components; use arbitrary marker)
 	 */
-	void addEntityVariantMapping(EntityType<?> entityType, @Nullable DataComponentType<?> variantType);
+	void addEntityVariantMapping(Class<? extends Entity> entityType, @Nullable Object variantType);
 
 	/**
-	 * Marks a data component type as a variant or non-variant type.
+	 * Marks an object as a variant or non-variant type.
 	 *
 	 * @param type      component type
 	 * @param isVariant whether the type is a variant
 	 */
-	void addVariantType(DataComponentType<?> type, boolean isVariant);
+	void addVariantType(Object type, boolean isVariant);
 
 	/**
 	 * Reloads Jade ignore lists.

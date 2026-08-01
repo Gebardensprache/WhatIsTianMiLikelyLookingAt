@@ -5,7 +5,7 @@ import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.Map;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.IJadeProvider;
 import snownee.jade.impl.WailaClientRegistration;
 import snownee.jade.impl.WailaCommonRegistration;
@@ -43,14 +43,14 @@ public class DumpGenerator {
 		createSection(builder, "Progress", client.progressProviders);
 
 		builder.append("\n## Priorities");
-		for (Identifier Identifier : common.priorities.getSortedList()) {
-			builder.append("\n* ").append(Identifier);
+		for (ResourceLocation id : common.priorities.getSortedList()) {
+			builder.append("\n* ").append(id);
 		}
 
 		return builder.toString();
 	}
 
-	private static void createSection(StringBuilder builder, String subsection, Map<Identifier, ? extends IJadeProvider> map) {
+	private static void createSection(StringBuilder builder, String subsection, Map<ResourceLocation, ? extends IJadeProvider> map) {
 		if (map.isEmpty()) {
 			return;
 		}

@@ -2,15 +2,13 @@ package snownee.jade.addon.vanilla;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.animal.Animal;
-import net.minecraft.world.entity.animal.allay.Allay;
-import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.passive.EntityAnimal;
+import net.minecraft.entity.passive.EntityVillager;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextComponentTranslation;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IEntityComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -25,31 +23,39 @@ public class MobBreedingProvider implements StreamServerDataProvider<EntityAcces
 
 	@Override
 	public @Nullable Integer streamData(EntityAccessor accessor) {
-		int time = 0;
 		Entity entity = accessor.getEntity();
-		if (entity instanceof Allay allay) {
-			if (allay.duplicationCooldown > 0 && allay.duplicationCooldown < Integer.MAX_VALUE) {
-				time = (int) allay.duplicationCooldown;
-			}
-		} else if (entity instanceof Villager villager) {
-			time = villager.getAge();
-		} else {
-			Animal animal = (Animal) entity;
+		int time;
+		if (entity instanceof EntityVillager) {
+			time = ((EntityVillager) entity).getGrowingAge();
+		} else if (entity instanceof EntityAnimal) {
+			EntityAnimal animal = (EntityAnimal) entity;
 			if (animal.isInLove()) {
 				return IN_LOVE;
 			}
-			time = animal.getAge();
+			time = animal.getGrowingAge();
+		} else {
+			return null;
 		}
 		return time > 0 ? time : null;
 	}
 
 	@Override
-	public StreamCodec<RegistryFriendlyByteBuf, Integer> streamCodec() {
-		return ByteBufCodecs.VAR_INT.cast();
+	public DataCodec<Integer> streamCodec() {
+		return new DataCodec<>() {
+			@Override
+			public Integer decode(PacketBuffer buf) {
+				return buf.readVarInt();
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, Integer value) {
+				buf.writeVarInt(value);
+			}
+		};
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_MOB_BREEDING;
 	}
 
@@ -60,16 +66,17 @@ public class MobBreedingProvider implements StreamServerDataProvider<EntityAcces
 		public void appendTooltip(ITooltip tooltip, EntityAccessor accessor, IPluginConfig config) {
 			int time = MobBreedingProvider.INSTANCE.decodeFromData(accessor).orElse(0);
 			if (time == IN_LOVE) {
-				tooltip.add(Component.translatable("jade.mobbreeding.fed"));
+				tooltip.add(new TextComponentTranslation("jade.mobbreeding.fed"));
 			} else if (time > 0) {
-				tooltip.add(Component.translatable(
-						accessor.getEntity() instanceof Allay ? "jade.mobduplication.time" : "jade.mobbreeding.time",
+				// 1.12.2: Allay duplication cooldown has no equivalent.
+				tooltip.add(new TextComponentTranslation(
+						"jade.mobbreeding.time",
 						IThemeHelper.get().seconds(time, accessor.tickRate())));
 			}
 		}
 
 		@Override
-		public Identifier getUid() {
+		public ResourceLocation getUid() {
 			return JadeIds.MC_MOB_BREEDING;
 		}
 	}

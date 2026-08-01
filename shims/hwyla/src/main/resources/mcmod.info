@@ -1,0 +1,17 @@
+[
+  {
+    "modid": "waila",
+    "name": "Jade HWYLA Compatibility",
+    "version": "1.0.0",
+    "mcversion": "1.12.2",
+    "description": "Jade backport compatibility shim. Declares the legacy 'waila' mod id so third-party HWYLA integrations link against this dummy mod while rendering through Jade. Requires Jade (jade).",
+    "authorList": [
+      "Snownee"
+    ],
+    "credits": "ProfMobius, TehNut",
+    "url": "https://www.curseforge.com/minecraft/mc-mods/jade",
+    "dependencies": [
+      "jade"
+    ]
+  }
+]

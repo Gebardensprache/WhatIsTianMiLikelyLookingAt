@@ -1,11 +1,11 @@
 package snownee.jade.gui.config;
 
-import org.joml.Vector2i;
-import org.joml.Vector2ic;
-
-import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
-
-public class BelowOrAboveListEntryTooltipPositioner implements ClientTooltipPositioner {
+/**
+ * 1.12.2: plain-class replacement of the modern {@code ClientTooltipPositioner} machinery. Produces the
+ * screen-space position at which a tooltip should be drawn. {@code m}/{@code n} are the tooltip width/height,
+ * {@code i}/{@code j} the screen bounds.
+ */
+public class BelowOrAboveListEntryTooltipPositioner {
 
 	private final OptionsList list;
 	private final OptionsList.Entry entry;
@@ -15,23 +15,23 @@ public class BelowOrAboveListEntryTooltipPositioner implements ClientTooltipPosi
 		this.entry = entry;
 	}
 
-	@Override
-	public Vector2ic positionTooltip(int i, int j, int mouseX, int mouseY, int m, int n) {
-		Vector2i vector2i = new Vector2i();
+	public int[] positionTooltip(int i, int j, int mouseX, int mouseY, int m, int n) {
+		int x;
+		int y;
 		int index = list.children().indexOf(entry);
 		if (index == -1) {
-			vector2i.x = mouseX + 3;
-			vector2i.y = mouseY + 3;
-			return vector2i;
+			x = mouseX + 3;
+			y = mouseY + 3;
+			return new int[]{x, y};
 		}
-		vector2i.x = entry.getContentX() + entry.getTextX();
-		vector2i.y = list.getRowBottom(index) + 1;
-		if (vector2i.y + n > j) {
-			vector2i.y = list.getRowTop(index) - n - 1;
+		x = entry.getContentX() + entry.getTextX();
+		y = list.getRowBottom(index) + 1;
+		if (y + n > j) {
+			y = list.getRowTop(index) - n - 1;
 		}
-		if (vector2i.x + m > i) {
-			vector2i.x = Math.max(list.getRowLeft() + list.getRowWidth() - m, 4);
+		if (x + m > i) {
+			x = Math.max(list.getRowLeft() + list.getRowWidth() - m, 4);
 		}
-		return vector2i;
+		return new int[]{x, y};
 	}
 }

@@ -7,20 +7,19 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.google.common.collect.Sets;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.layouts.Layout;
-import net.minecraft.client.gui.layouts.LayoutElement;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.ITextComponent;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.JadeIds;
 import snownee.jade.api.fluid.JadeFluidObject;
 import snownee.jade.api.ui.BoxElement;
 import snownee.jade.api.ui.BoxStyle;
 import snownee.jade.api.ui.Element;
+import snownee.jade.api.ui.Layout;
+import snownee.jade.api.ui.LayoutElement;
 import snownee.jade.api.ui.Orientation;
 import snownee.jade.api.ui.ProgressStyle;
 import snownee.jade.api.ui.ResizeableElement;
@@ -31,15 +30,15 @@ import snownee.jade.impl.Tooltip;
 import snownee.jade.overlay.DisplayHelper;
 
 public class JadeUIInternal {
-	public static final Identifier DEFAULT_PROGRESS = JadeIds.JADE("progress");
-	public static final Identifier DEFAULT_PROGRESS_BASE = JadeIds.JADE("progress_base");
-	private static @Nullable Identifier contextUid;
+	public static final ResourceLocation DEFAULT_PROGRESS = JadeIds.JADE("progress");
+	public static final ResourceLocation DEFAULT_PROGRESS_BASE = JadeIds.JADE("progress_base");
+	private static @Nullable ResourceLocation contextUid;
 
 	public static boolean isEmptyElement(@Nullable Element element) {
 		return element == null;
 	}
 
-	public static TextElement text(Component component) {
+	public static TextElement text(ITextComponent component) {
 		return new TextElementImpl(component);
 	}
 
@@ -48,7 +47,7 @@ public class JadeUIInternal {
 	}
 
 	public static Element smallItem(ItemStack stack) {
-		int lineHeight = DisplayHelper.font().lineHeight;
+		int lineHeight = DisplayHelper.font().lineHeight();
 		return item(stack, 0.5F, "").size(lineHeight + 1, lineHeight - 1).offset(0, -1).narration("");
 	}
 
@@ -74,11 +73,11 @@ public class JadeUIInternal {
 
 	public static ResizeableElement progress(
 			float progress,
-			Identifier baseSprite,
-			Identifier progressSprite,
+			ResourceLocation baseSprite,
+			ResourceLocation progressSprite,
 			int width,
 			int height,
-			@Nullable Component text,
+			@Nullable ITextComponent text,
 			@Nullable ProgressStyle style) {
 		return progress(
 				new ProgressView(
@@ -106,11 +105,7 @@ public class JadeUIInternal {
 		return new SimpleProgressStyle();
 	}
 
-	public static ResizeableElement sprite(RenderPipeline renderPipeline, Identifier sprite, int width, int height) {
-		return new SpriteElement(renderPipeline, sprite, width, height);
-	}
-
-	public static ResizeableElement sprite(Identifier sprite, int width, int height) {
+	public static ResizeableElement sprite(ResourceLocation sprite, int width, int height) {
 		return new SpriteElement(sprite, width, height);
 	}
 
@@ -126,11 +121,11 @@ public class JadeUIInternal {
 		return offset(element, 0, 0).onClick(onClick);
 	}
 
-	public static @Nullable Identifier contextUid() {
+	public static @Nullable ResourceLocation contextUid() {
 		return contextUid;
 	}
 
-	public static void setContextUid(@Nullable Identifier uid) {
+	public static void setContextUid(@Nullable ResourceLocation uid) {
 		JadeUIInternal.contextUid = uid;
 	}
 
@@ -138,6 +133,11 @@ public class JadeUIInternal {
 		visitChildrenRecursiveInternal(layoutElement, consumer, Sets.newIdentityHashSet());
 	}
 
+	/**
+	 * 1.12.2: the modern fallback ({@code layoutElement.visitWidgets(...)}) is dropped -- Jade's own
+	 * {@link LayoutElement} has no such method, since 1.12.2 has no {@code AbstractWidget} hierarchy to walk.
+	 * Every non-{@link BoxElement} node in Jade's layout tree is either a {@link Layout} (walked below) or a leaf.
+	 */
 	private static void visitChildrenRecursiveInternal(
 			@Nullable LayoutElement layoutElement,
 			Consumer<LayoutElement> consumer,
@@ -151,28 +151,22 @@ public class JadeUIInternal {
 		}
 		if (layoutElement instanceof Layout layout) {
 			layout.visitChildren(element -> visitChildrenRecursiveInternal(element, consumer, set));
-		} else {
-			layoutElement.visitWidgets(widget -> visitChildrenRecursiveInternal(widget, consumer, set));
 		}
 	}
 
-	public static ResizeableElement horizontalTiledSprite(
-			RenderPipeline renderPipeline,
-			Identifier sprite,
-			int width,
-			int height) {
-		SpriteElement element = (SpriteElement) sprite(renderPipeline, sprite, width, height);
+	public static ResizeableElement horizontalTiledSprite(ResourceLocation sprite, int width, int height) {
+		SpriteElement element = (SpriteElement) sprite(sprite, width, height);
 		element.tiledOrientation = Orientation.HORIZONTAL;
 		return element;
 	}
 
-	public static ResizeableElement verticalTiledSprite(RenderPipeline renderPipeline, Identifier sprite, int width, int height) {
-		SpriteElement element = (SpriteElement) sprite(renderPipeline, sprite, width, height);
+	public static ResizeableElement verticalTiledSprite(ResourceLocation sprite, int width, int height) {
+		SpriteElement element = (SpriteElement) sprite(sprite, width, height);
 		element.tiledOrientation = Orientation.VERTICAL;
 		return element;
 	}
 
 	public static boolean isPinned() {
-		return Minecraft.getInstance().gui.screen() instanceof PinScreen;
+		return Minecraft.getMinecraft().currentScreen instanceof PinScreen;
 	}
 }

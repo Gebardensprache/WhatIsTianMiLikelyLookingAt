@@ -13,18 +13,18 @@ import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.PrimitiveCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import io.netty.buffer.ByteBuf;
 import it.unimi.dsi.fastutil.floats.FloatArrayList;
 import it.unimi.dsi.fastutil.floats.FloatList;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
-import net.minecraft.locale.Language;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.util.ExtraCodecs;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.ResourceLocation;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.config.IgnoreList;
 
 public class JadeCodecs {
+
+	public static final Codec<ResourceLocation> RESOURCE_LOCATION = Codec.STRING.xmap(ResourceLocation::new, ResourceLocation::toString);
 
 	public static final Codec<OptionalInt> OPTIONAL_INT = new Codec<>() {
 		@Override
@@ -79,50 +79,56 @@ public class JadeCodecs {
 			};
 		}
 	};
-	public static final StreamCodec<ByteBuf, Object> PRIMITIVE_STREAM_CODEC = new StreamCodec<>() {
+	public static final DataCodec<Object> PRIMITIVE_STREAM_CODEC = new DataCodec<>() {
 		@Override
-		public Object decode(ByteBuf buf) {
+		public Object decode(PacketBuffer buf) {
 			byte b = buf.readByte();
 			if (b == 0) {
 				return false;
 			} else if (b == 1) {
 				return true;
 			} else if (b == 2) {
-				return ByteBufCodecs.VAR_INT.decode(buf);
+				return buf.readVarInt();
 			} else if (b == 3) {
-				return ByteBufCodecs.FLOAT.decode(buf);
+				return buf.readFloat();
 			} else if (b == 4) {
-				return ByteBufCodecs.STRING_UTF8.decode(buf);
-			} else if (b > 20) {
+				return buf.readString(32767);
+			} else if (b >= 20) {
+				// 1.12.2: compact ints encode as i + 20 for i in [0, 107], so byte 20
+				// means 0. Upstream's `> 20` guard made the value 0 undecodable.
 				return b - 20;
 			}
 			throw new IllegalArgumentException("Unknown primitive type: " + b);
 		}
 
 		@Override
-		public void encode(ByteBuf buf, Object o) {
+		public void encode(PacketBuffer buf, Object o) {
 			switch (o) {
 				case Boolean b -> buf.writeByte(b ? 1 : 0);
 				case Number n -> {
 					float f = n.floatValue();
 					if (f != (int) f) {
 						buf.writeByte(3);
-						ByteBufCodecs.FLOAT.encode(buf, f);
-					}
-					int i = n.intValue();
-					if (i <= Byte.MAX_VALUE - 20 && i >= 0) {
-						buf.writeByte(i + 20);
+						buf.writeFloat(f);
 					} else {
-						ByteBufCodecs.VAR_INT.encode(buf, i);
+						// 1.12.2: upstream lacked this else, writing both a float and an
+						// int for non-integral values and desyncing the reader.
+						int i = n.intValue();
+						if (i <= Byte.MAX_VALUE - 20 && i >= 0) {
+							buf.writeByte(i + 20);
+						} else {
+							buf.writeByte(2);
+							buf.writeVarInt(i);
+						}
 					}
 				}
 				case String s -> {
 					buf.writeByte(4);
-					ByteBufCodecs.STRING_UTF8.encode(buf, s);
+					buf.writeString(s);
 				}
 				case Enum<?> anEnum -> {
 					buf.writeByte(4);
-					ByteBufCodecs.STRING_UTF8.encode(buf, anEnum.name());
+					buf.writeString(anEnum.name());
 				}
 				case null -> throw new NullPointerException();
 				default -> throw new IllegalArgumentException("Unknown primitive type: %s (%s)".formatted(o, o.getClass()));
@@ -133,12 +139,11 @@ public class JadeCodecs {
 	public static Codec<IgnoreList> ignoreList() {
 		return RecordCodecBuilder.create(i -> i.group(
 				Codec.STRING.optionalFieldOf("__comment", "").forGetter($ -> {
-					return Language.getInstance().getOrDefault(
-							"jade.ignore_list.comment",
-							"This is an ignore list for the target of Jade. You can add registry ids to the \"values\" list.");
+					// 1.12.2: no Language.getOrDefault; use a static English default
+					return "This is an ignore list for the target of Jade. You can add registry ids to the \"values\" list.";
 				}),
 				Codec.STRING.listOf().fieldOf("values").forGetter($ -> $.values),
-				ExtraCodecs.POSITIVE_INT.optionalFieldOf("version", 1).forGetter($ -> $.version)
+				Codec.intRange(0, Integer.MAX_VALUE).optionalFieldOf("version", 1).forGetter($ -> $.version)
 		).apply(
 				i, (comment, values, version) -> {
 					IgnoreList ignoreList = new IgnoreList();

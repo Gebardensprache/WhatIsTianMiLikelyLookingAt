@@ -1,0 +1,19 @@
+[versions]
+annotations = "26.1.0"
+jspecify = "1.0.0"
+assertj = "3.27.7"
+dataFixerUpper = "10.0.21"
+
+hei = "4.32.0"
+codeChickenLib = "3.2.3.358"
+gregtech = "2.8.10-beta"
+
+[libraries]
+annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+dataFixerUpper = { module = "com.mojang:datafixerupper", version.ref = "dataFixerUpper" }
+
+hei = { module = "mezz:jei", version.ref = "hei" }
+codeChickenLib = { module = "codechicken:codechickenlib", version.ref = "codeChickenLib" }
+gregtech = { module = "gregtech:gregtech", version.ref = "gregtech" }

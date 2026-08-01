@@ -1,11 +1,12 @@
 package snownee.jade.addon.vanilla;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.animal.camel.Camel;
-import net.minecraft.world.entity.animal.equine.AbstractHorse;
-import net.minecraft.world.entity.animal.equine.Llama;
+import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.ai.attributes.IAttributeInstance;
+import net.minecraft.entity.passive.AbstractHorse;
+import net.minecraft.entity.passive.EntityLlama;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentTranslation;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IEntityComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -17,16 +18,34 @@ import snownee.jade.overlay.DisplayHelper;
 public class HorseStatsProvider implements IEntityComponentProvider {
 	public static final HorseStatsProvider INSTANCE = new HorseStatsProvider();
 
-	private static final double MAX_JUMP_HEIGHT = getJumpHeight(AbstractHorse.MAX_JUMP_STRENGTH);
-	private static final double MAX_MOVEMENT_SPEED = getSpeed(AbstractHorse.MAX_MOVEMENT_SPEED);
+	/**
+	 * 1.12.2: {@code AbstractHorse.MAX_JUMP_STRENGTH} / {@code MAX_MOVEMENT_SPEED} do not exist. The
+	 * ceilings are the maxima of {@code AbstractHorse.getModifiedJumpStrength()} and
+	 * {@code getModifiedMovementSpeed()}: {@code 0.4 + 3 * 0.2 = 1.0} and
+	 * {@code (0.45 + 3 * 0.3) * 0.25 = 0.3375}.
+	 */
+	private static final double MAX_JUMP_STRENGTH = 1.0;
+	private static final double MAX_MOVEMENT_SPEED_ATTRIBUTE = 0.3375;
 
-	private static Component switchText(String key, boolean showMax, double value, double max) {
+	/**
+	 * 1.12.2: the jump-strength attribute is {@code AbstractHorse.JUMP_STRENGTH}, a protected
+	 * {@code RangedAttribute} rather than a member of {@code Attributes}. It is looked up by its
+	 * registered name so no access transformer is needed.
+	 */
+	private static final String JUMP_STRENGTH_NAME = "horse.jumpStrength";
+
+	private static final double MAX_JUMP_HEIGHT = getJumpHeight(MAX_JUMP_STRENGTH);
+	private static final double MAX_MOVEMENT_SPEED = getSpeed(MAX_MOVEMENT_SPEED_ATTRIBUTE);
+
+	private static ITextComponent switchText(String key, boolean showMax, double value, double max) {
 		IThemeHelper t = IThemeHelper.get();
-		Component valueText = t.info(DisplayHelper.dfCommas.format(value));
+		ITextComponent valueText = t.info(DisplayHelper.dfCommas.format(value));
 		if (showMax) {
-			return Component.translatable(key, Component.translatable("jade.fraction", valueText, DisplayHelper.dfCommas.format(max)));
+			return (ITextComponent) new TextComponentTranslation(
+					key,
+					new TextComponentTranslation("jade.fraction", valueText, DisplayHelper.dfCommas.format(max)));
 		} else {
-			return Component.translatable(key, valueText);
+			return (ITextComponent) new TextComponentTranslation(key, valueText);
 		}
 	}
 
@@ -44,25 +63,27 @@ public class HorseStatsProvider implements IEntityComponentProvider {
 	public void appendTooltip(ITooltip tooltip, EntityAccessor accessor, IPluginConfig config) {
 		AbstractHorse horse = (AbstractHorse) accessor.getEntity();
 		boolean showMax = accessor.showDetails();
-		if (horse instanceof Llama llama) {
-			tooltip.add(switchText("jade.llamaStrength", showMax, llama.getStrength(), 5));
+		if (horse instanceof EntityLlama) {
+			tooltip.add(switchText("jade.llamaStrength", showMax, ((EntityLlama) horse).getStrength(), 5));
 			return;
 		}
-		if (horse instanceof Camel) {
-			return;
-		}
-		if (horse.getAttributes().hasAttribute(Attributes.JUMP_STRENGTH)) {
-			double jumpHeight = getJumpHeight(horse.getAttributeBaseValue(Attributes.JUMP_STRENGTH));
+		// 1.12.2: no Camel, so the early return for it is dropped.
+		IAttributeInstance jumpStrength = horse.getAttributeMap().getAttributeInstanceByName(JUMP_STRENGTH_NAME);
+		if (jumpStrength != null) {
+			// 1.12.2: use the effective attribute value so equipment and potion modifiers remain visible.
+			double jumpHeight = getJumpHeight(jumpStrength.getAttributeValue());
 			tooltip.add(switchText("jade.horseStat.jump", showMax, jumpHeight, MAX_JUMP_HEIGHT));
 		}
-		if (horse.getAttributes().hasAttribute(Attributes.MOVEMENT_SPEED)) {
-			double speed = getSpeed(horse.getAttributeBaseValue(Attributes.MOVEMENT_SPEED));
+		IAttributeInstance movementSpeed = horse.getAttributeMap().getAttributeInstance(SharedMonsterAttributes.MOVEMENT_SPEED);
+		if (movementSpeed != null) {
+			// 1.12.2: use the effective attribute value so equipment and potion modifiers remain visible.
+			double speed = getSpeed(movementSpeed.getAttributeValue());
 			tooltip.add(switchText("jade.horseStat.speed", showMax, speed, MAX_MOVEMENT_SPEED));
 		}
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_HORSE_STATS;
 	}
 }

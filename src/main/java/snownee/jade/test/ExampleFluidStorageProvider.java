@@ -1,10 +1,11 @@
 package snownee.jade.test;
 
+import java.util.Arrays;
 import java.util.List;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.material.Fluids;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraftforge.fluids.FluidRegistry;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.fluid.JadeFluidObject;
 import snownee.jade.api.ui.MessageType;
@@ -18,7 +19,7 @@ public enum ExampleFluidStorageProvider implements IServerExtensionProvider<Flui
 	INSTANCE;
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return ExamplePlugin.UID_TEST_FLUIDS;
 	}
 
@@ -26,7 +27,7 @@ public enum ExampleFluidStorageProvider implements IServerExtensionProvider<Flui
 	public List<ClientViewGroup<FluidView>> getClientGroups(Accessor<?> accessor, List<ViewGroup<FluidView.Data>> groups) {
 		return ClientViewGroup.map(groups, FluidView::readDefault, (group, clientGroup) -> {
 			if (group.id != null) {
-				clientGroup.title = Component.literal(group.id);
+				clientGroup.title = new TextComponentString(group.id);
 			}
 			clientGroup.messageType = MessageType.SUCCESS;
 		});
@@ -34,12 +35,12 @@ public enum ExampleFluidStorageProvider implements IServerExtensionProvider<Flui
 
 	@Override
 	public List<ViewGroup<FluidView.Data>> getGroups(Accessor<?> accessor) {
-		var tank1 = new ViewGroup<>(List.of(new FluidView.Data(JadeFluidObject.of(Fluids.LAVA, 1000), 2000)));
+		var tank1 = new ViewGroup<>(List.of(new FluidView.Data(JadeFluidObject.of(FluidRegistry.LAVA, 1000), 2000)));
 		tank1.id = "1";
 		var tank2 = new ViewGroup<>(List.of(
-				new FluidView.Data(JadeFluidObject.of(Fluids.WATER, 500), 2000),
+				new FluidView.Data(JadeFluidObject.of(FluidRegistry.WATER, 500), 2000),
 				new FluidView.Data(JadeFluidObject.empty(), 2000)));
 		// tank2.id = "2";
-		return List.of(tank1, tank2);
+		return Arrays.asList(tank1, tank2);
 	}
 }

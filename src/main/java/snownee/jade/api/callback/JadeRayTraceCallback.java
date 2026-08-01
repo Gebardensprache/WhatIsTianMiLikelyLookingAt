@@ -2,7 +2,7 @@ package snownee.jade.api.callback;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.world.phys.HitResult;
+import net.minecraft.util.math.RayTraceResult;
 import snownee.jade.api.Accessor;
 
 /**
@@ -20,6 +20,6 @@ public interface JadeRayTraceCallback {
 	 * @return a replacement accessor, or {@code null} to keep the current one
 	 */
 	@Nullable
-	Accessor<?> onRayTrace(HitResult hitResult, Accessor<?> accessor, Accessor<?> originalAccessor);
+	Accessor<?> onRayTrace(RayTraceResult hitResult, Accessor<?> accessor, Accessor<?> originalAccessor);
 
 }

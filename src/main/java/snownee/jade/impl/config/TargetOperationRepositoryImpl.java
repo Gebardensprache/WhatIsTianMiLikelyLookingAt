@@ -3,7 +3,6 @@ package snownee.jade.impl.config;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -11,12 +10,7 @@ import java.util.regex.Pattern;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
-import net.minecraft.core.Holder;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.core.Registry;
-import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.util.Util;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.Jade;
 import snownee.jade.api.config.IgnoreList;
 import snownee.jade.api.config.TargetOperationRepository;
@@ -25,27 +19,23 @@ import snownee.jade.util.JadeCodecs;
 import snownee.jade.util.JsonConfig;
 
 public class TargetOperationRepositoryImpl<T, U> implements TargetOperationRepository<T, U> {
-	private final ResourceKey<? extends Registry<T>> registry;
-	private final Function<U, ResourceKey<T>> mapper;
+	private final Function<U, ResourceLocation> mapper;
 	private final String fileName;
 	private final Supplier<List<String>> defaultValues;
-	private final Map<ResourceKey<T>, TargetOperation> builtIn = Maps.newIdentityHashMap();
-	private final Map<ResourceKey<T>, TargetOperation> operations = Maps.newIdentityHashMap();
+	private final Map<ResourceLocation, TargetOperation> builtIn = Maps.newIdentityHashMap();
+	private final Map<ResourceLocation, TargetOperation> operations = Maps.newIdentityHashMap();
 
 	public TargetOperationRepositoryImpl(
-			ResourceKey<? extends Registry<T>> registry,
-			Function<U, ResourceKey<T>> mapper,
+			Function<U, ResourceLocation> mapper,
 			String fileName,
 			Supplier<List<String>> defaultValues) {
-		this.registry = registry;
 		this.mapper = mapper;
 		this.fileName = fileName;
 		this.defaultValues = defaultValues;
 	}
 
 	@Override
-	public void reload(HolderLookup.Provider provider) {
-		HolderLookup.RegistryLookup<T> lookup = provider.lookupOrThrow(registry);
+	public void reload() {
 		operations.clear();
 		operations.putAll(builtIn);
 
@@ -53,55 +43,62 @@ public class TargetOperationRepositoryImpl<T, U> implements TargetOperationRepos
 				Jade.ID + "/" + fileName,
 				JadeCodecs.ignoreList(),
 				null,
-				() -> Util.make(new IgnoreList(), $ -> $.values = defaultValues.get())).get();
+				() -> {
+					IgnoreList l = new IgnoreList();
+					l.values = defaultValues.get();
+					return l;
+				}).get();
 		List<Pattern> patterns = Lists.newArrayList();
+		// Collect entries that are patterns vs. concrete resource locations
 		for (String value : list.values) {
 			try {
 				if (value.startsWith("/") && value.endsWith("/") && value.length() > 1) {
 					patterns.add(Pattern.compile(value.substring(1, value.length() - 1)));
 				} else {
-					ResourceKey<T> key = ResourceKey.create(registry, Identifier.parse(value));
-					Optional<Holder.Reference<T>> optional = lookup.get(key);
-					if (optional.isPresent()) {
-						operations.put(optional.get().key(), TargetOperation.HIDE);
-					} else {
-						throw new IllegalArgumentException("Unknown id: " + value);
-					}
+					ResourceLocation key = new ResourceLocation(value);
+					operations.put(key, TargetOperation.HIDE);
 				}
 			} catch (Exception e) {
 				Jade.LOGGER.error("Failed to parse ignore list entry: %s".formatted(value), e);
 			}
 		}
+		// Pattern matching: apply regex against the plain-text values list
 		if (!patterns.isEmpty()) {
-			for (ResourceKey<T> key : lookup.listElementIds().toList()) {
-				String s = key.identifier().toString();
-				for (Pattern pattern : patterns) {
-					if (pattern.matcher(s).find()) {
-						operations.put(key, TargetOperation.HIDE);
-						break;
+			for (String value : list.values) {
+				if (value.startsWith("/") && value.endsWith("/") && value.length() > 1) {
+					continue;
+				}
+				try {
+					ResourceLocation key = new ResourceLocation(value);
+					for (Pattern pattern : patterns) {
+						if (pattern.matcher(value).find()) {
+							operations.put(key, TargetOperation.HIDE);
+							break;
+						}
 					}
+				} catch (Exception ignored) {
 				}
 			}
 		}
 	}
 
 	@Override
-	public boolean shouldHide(ResourceKey<T> key) {
+	public boolean shouldHide(ResourceLocation key) {
 		return operations.get(key) == TargetOperation.HIDE;
 	}
 
 	@Override
-	public boolean shouldPick(ResourceKey<T> key) {
+	public boolean shouldPick(ResourceLocation key) {
 		return operations.get(key) == TargetOperation.PICK;
 	}
 
 	@Override
-	public void hide(ResourceKey<T> key) {
+	public void hide(ResourceLocation key) {
 		builtIn.put(Objects.requireNonNull(key), TargetOperation.HIDE);
 	}
 
 	@Override
-	public void pick(ResourceKey<T> key) {
+	public void pick(ResourceLocation key) {
 		if (!CommonProxy.isPhysicallyClient()) {
 			return;
 		}
@@ -109,7 +106,7 @@ public class TargetOperationRepositoryImpl<T, U> implements TargetOperationRepos
 	}
 
 	@Override
-	public ResourceKey<T> map(U obj) {
+	public ResourceLocation map(U obj) {
 		return mapper.apply(obj);
 	}
 }

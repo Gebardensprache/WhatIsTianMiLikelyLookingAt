@@ -2,8 +2,8 @@ package snownee.jade.gui;
 
 import java.util.function.Consumer;
 
-import net.minecraft.client.gui.layouts.Layout;
-import net.minecraft.client.gui.layouts.LayoutElement;
+import snownee.jade.api.ui.Layout;
+import snownee.jade.api.ui.LayoutElement;
 
 public class LayoutWithPadding implements Layout, ResizeableLayout {
 	private final LayoutElement wrapped;

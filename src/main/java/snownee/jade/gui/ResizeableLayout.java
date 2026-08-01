@@ -1,6 +1,6 @@
 package snownee.jade.gui;
 
-import net.minecraft.client.gui.layouts.LayoutElement;
+import snownee.jade.api.ui.LayoutElement;
 
 public interface ResizeableLayout extends LayoutElement {
 	void setFreeSpace(int width, int height);

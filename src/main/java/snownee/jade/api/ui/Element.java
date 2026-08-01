@@ -1,49 +1,46 @@
 package snownee.jade.api.ui;
 
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 import org.jetbrains.annotations.Contract;
-import org.joml.Matrix3x2fStack;
 import org.jspecify.annotations.Nullable;
 
 import com.google.common.base.Preconditions;
-import com.mojang.brigadier.Message;
 
-import net.minecraft.client.KeyboardHandler;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Renderable;
-import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.client.gui.layouts.LayoutElement;
-import net.minecraft.client.gui.layouts.LayoutSettings;
-import net.minecraft.client.gui.narration.NarratedElementType;
-import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.gui.narration.NarrationSupplier;
-import net.minecraft.client.gui.navigation.ScreenRectangle;
-import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.Style;
-import net.minecraft.resources.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.event.HoverEvent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.JadeInternals;
 import snownee.jade.gui.JadeLinearLayout;
 import snownee.jade.impl.ui.JadeUIInternal;
 import snownee.jade.overlay.DisplayHelper;
+import snownee.jade.overlay.OverlayRenderer;
 
 /**
  * Base class for renderable Jade UI elements.
+ * <p>
+ * 1.12.2: stands in for the modern class implementing {@code Renderable}, {@code LayoutElement},
+ * {@code NarrationSupplier}, {@code GuiEventListener} and {@code CopyBehavior}. Only {@code Renderable}/
+ * {@code LayoutElement} (Jade's own stand-ins) and {@code CopyBehavior} are kept: 1.12.2 has no
+ * {@code AbstractWidget}/{@code GuiEventListener} hierarchy to satisfy narration or focus/mouse-over plumbing.
  */
-public abstract class Element implements Renderable, LayoutElement, NarrationSupplier, GuiEventListener, CopyBehavior {
+public abstract class Element implements Renderable, LayoutElement, CopyBehavior {
 
-	protected @Nullable Identifier tag;
+	protected @Nullable ResourceLocation tag;
 	protected int width;
 	protected int height;
 	private int x;
 	private int y;
-	private @Nullable Component narration = CommonComponents.EMPTY;
-	private @Nullable UnaryOperator<LayoutSettings> settings;
+	private static final ITextComponent EMPTY_NARRATION = new TextComponentString("");
+	private @Nullable ITextComponent narration = EMPTY_NARRATION;
+	private @Nullable UnaryOperator<Object> settings;
 	private JadeLinearLayout.@Nullable Align alignSelf;
 
 	@Contract("_, _ -> new")
@@ -62,12 +59,12 @@ public abstract class Element implements Renderable, LayoutElement, NarrationSup
 	}
 
 	@Contract("_ -> this")
-	public Element settings(UnaryOperator<LayoutSettings> settings) {
+	public Element settings(UnaryOperator<Object> settings) {
 		this.settings = settings;
 		return this;
 	}
 
-	public @Nullable UnaryOperator<LayoutSettings> getSettings() {
+	public @Nullable UnaryOperator<Object> getSettings() {
 		return settings;
 	}
 
@@ -100,46 +97,46 @@ public abstract class Element implements Renderable, LayoutElement, NarrationSup
 	}
 
 	@Contract("_ -> this")
-	public Element tag(@Nullable Identifier tag) {
+	public Element tag(@Nullable ResourceLocation tag) {
 		this.tag = tag;
 		return this;
 	}
 
-	public @Nullable Identifier getTag() {
+	public @Nullable ResourceLocation getTag() {
 		return tag;
 	}
 
-	public @Nullable Component cachedNarration() {
-		if (narration == CommonComponents.EMPTY) {
+	public @Nullable ITextComponent cachedNarration() {
+		if (narration == EMPTY_NARRATION) {
 			narration = getNarration();
 		}
 		return narration;
 	}
 
-	public abstract @Nullable Component getNarration();
+	public abstract @Nullable ITextComponent getNarration();
 
 	@Contract("-> this")
 	public Element refreshNarration() {
-		narration = CommonComponents.EMPTY;
+		narration = EMPTY_NARRATION;
 		return this;
 	}
 
 	@Contract("_ -> this")
 	public Element narration(String narration) {
 		Preconditions.checkNotNull(narration, "narration must not be null");
-		this.narration = narration.isEmpty() ? null : Component.literal(narration);
+		this.narration = narration.isEmpty() ? null : new TextComponentString(narration);
 		return this;
 	}
 
 	@Contract("_ -> this")
-	public Element narration(Component narration) {
+	public Element narration(ITextComponent narration) {
 		Preconditions.checkNotNull(narration, "narration must not be null");
 		this.narration = narration;
 		return this;
 	}
 
 	@Override
-	public abstract void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks);
+	public abstract void extractRenderState(int mouseX, int mouseY, float partialTicks);
 
 	@Override
 	public void setX(int x) {
@@ -171,79 +168,57 @@ public abstract class Element implements Renderable, LayoutElement, NarrationSup
 		return height;
 	}
 
-	@Override
-	public final ScreenRectangle getRectangle() {
-		return LayoutElement.super.getRectangle();
-	}
-
-	@Override
-	public void visitWidgets(Consumer<AbstractWidget> consumer) {
-	}
-
-	@Override
-	public void updateNarration(NarrationElementOutput narrationElementOutput) {
-		Component message = cachedNarration();
-		if (message != null) {
-			narrationElementOutput.add(NarratedElementType.TITLE, message);
-		}
-	}
-
-	@Override
 	public boolean isMouseOver(double mouseX, double mouseY) {
 		return mouseX >= getX() && mouseX < getX() + getWidth() && mouseY >= getY() && mouseY < getY() + getHeight();
 	}
 
 	@Override
-	public void setFocused(boolean bl) {}
-
-	@Override
-	public boolean isFocused() {
-		return false;
-	}
-
-	@Override
-	public boolean copyToClipboard(KeyboardHandler keyboardHandler) {
-		if (this instanceof Message message) {
-			keyboardHandler.setClipboard(message.getString());
-			return true;
-		}
-		Component component = cachedNarration();
+	public boolean copyToClipboard() {
+		ITextComponent component = cachedNarration();
 		if (component != null) {
-			keyboardHandler.setClipboard(component.getString());
+			GuiScreen.setClipboardString(component.getUnformattedText());
 			return true;
 		}
 		return false;
 	}
 
-	public void renderDebug(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks, RenderDebugContext context) {
-		JadeInternals.getDisplayHelper().drawBorder(graphics, getRectangle(), 1, 0x88FF0000, true);
+	/**
+	 * 1.12.2: {@code GuiGraphicsExtractor} parameter dropped. Pose transforms use {@code GlStateManager}
+	 * instead of the deleted {@code Matrix3x2fStack}; the font renderer comes from {@link DisplayHelper#font()}.
+	 */
+	public void renderDebug(int mouseX, int mouseY, float partialTicks, RenderDebugContext context) {
+		JadeInternals.getDisplayHelper().drawBorder(getRectangle(), 1, 0x88FF0000, true);
 		if (JadeUI.hasAltDown() && getTag() != null) {
 			int centerX = context.root.getX() + context.root.getWidth() / 2;
 			int x = getX();
 			int y = getY();
 			String s = getTag().toString();
 			int textWidth = DisplayHelper.font().width(s);
-			Matrix3x2fStack pose = graphics.pose();
-			pose.pushMatrix();
-			pose.translate(x, y);
-			pose.scale(0.5F);
+			GlStateManager.pushMatrix();
+			GlStateManager.translate(x, y, 0.0F);
+			GlStateManager.scale(0.5F, 0.5F, 1.0F);
 			if (x > centerX) {
-				pose.translate(getWidth() + getWidth(), 0);
+				GlStateManager.translate(getWidth() + getWidth(), 0, 0.0F);
 			} else {
-				pose.translate(-textWidth - 4, 0);
+				GlStateManager.translate(-textWidth - 4, 0, 0.0F);
 			}
-			graphics.fill(0, 0, textWidth + 4, DisplayHelper.font().lineHeight + 4, 0x88000000);
-			graphics.text(DisplayHelper.font(), s, 2, 2, 0xFFFFFFFF, false);
-			pose.popMatrix();
+			Gui.drawRect(0, 0, textWidth + 4, DisplayHelper.font().lineHeight() + 4, 0x88000000);
+			Minecraft.getMinecraft().fontRenderer.drawStringWithShadow(s, 2, 2, 0xFFFFFFFF);
+			GlStateManager.popMatrix();
 		}
 	}
 
-	public static void setHoverEffect(GuiGraphicsExtractor graphics, Component component) {
-		setHoverEffect(graphics, new HoverEvent.ShowText(component));
+	/**
+	 * 1.12.2: {@code GuiGraphicsExtractor} parameter dropped. Writes directly to
+	 * {@link OverlayRenderer#hoveredTextStyle} instead of a graphics-context field.
+	 */
+	public static void setHoverEffect(ITextComponent component) {
+		HoverEvent event = new HoverEvent(HoverEvent.Action.SHOW_TEXT, component);
+		OverlayRenderer.hoveredTextStyle = new Style().setHoverEvent(event);
 	}
 
-	public static void setHoverEffect(GuiGraphicsExtractor graphics, HoverEvent event) {
-		graphics.hoveredTextStyle = Style.EMPTY.withHoverEvent(event);
+	public static void setHoverEffect(HoverEvent event) {
+		OverlayRenderer.hoveredTextStyle = new Style().setHoverEvent(event);
 	}
 
 	public static class RenderDebugContext {

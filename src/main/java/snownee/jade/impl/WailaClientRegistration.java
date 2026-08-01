@@ -24,20 +24,19 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.client.resources.language.I18n;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponentType;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.LevelAccessor;
-import net.minecraft.world.level.block.Block;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.network.NetHandlerPlayClient;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityList;
+import net.minecraft.item.ItemStack;
+import net.minecraft.world.World;
+import net.minecraft.block.Block;
 import snownee.jade.Jade;
 import snownee.jade.JadeClient;
 import snownee.jade.addon.access.EntityVariantHelper;
@@ -96,16 +95,16 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 	public final CallbackContainer<JadeItemModNameCallback> itemModNameCallback = new CallbackContainer<>();
 	public final CallbackContainer<JadeBeforeTooltipCollectCallback> beforeTooltipCollectCallback = new CallbackContainer<>();
 
-	public final Map<Identifier, ConfigEntry<?>> configEntries = Maps.newHashMap();
-	public final Multimap<Identifier, Component> configCategoryOverrides = ArrayListMultimap.create();
+	public final Map<ResourceLocation, ConfigEntry<?>> configEntries = Maps.newHashMap();
+	public final Multimap<ResourceLocation, ITextComponent> configCategoryOverrides = ArrayListMultimap.create();
 
 	public final Map<Block, CustomEnchantPower> customEnchantPowers = Maps.newHashMap();
-	public final Map<Identifier, IClientExtensionProvider<ItemStack, ItemView>> itemStorageProviders = Maps.newHashMap();
-	public final Map<Identifier, IClientExtensionProvider<FluidView.Data, FluidView>> fluidStorageProviders = Maps.newHashMap();
-	public final Map<Identifier, IClientExtensionProvider<EnergyView.Data, EnergyView>> energyStorageProviders = Maps.newHashMap();
-	public final Map<Identifier, IClientExtensionProvider<ProgressView.Data, ProgressView>> progressProviders = Maps.newHashMap();
+	public final Map<ResourceLocation, IClientExtensionProvider<ItemStack, ItemView>> itemStorageProviders = Maps.newHashMap();
+	public final Map<ResourceLocation, IClientExtensionProvider<FluidView.Data, FluidView>> fluidStorageProviders = Maps.newHashMap();
+	public final Map<ResourceLocation, IClientExtensionProvider<EnergyView.Data, EnergyView>> energyStorageProviders = Maps.newHashMap();
+	public final Map<ResourceLocation, IClientExtensionProvider<ProgressView.Data, ProgressView>> progressProviders = Maps.newHashMap();
 
-	public final Set<Identifier> clientFeatures = Sets.newHashSet();
+	public final Set<ResourceLocation> clientFeatures = Sets.newHashSet();
 
 	public final Map<Class<Accessor<?>>, AccessorClientHandler<Accessor<?>>> accessorHandlers = Maps.newIdentityHashMap();
 
@@ -185,42 +184,42 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 	}
 
 	@Override
-	public void addConfig(Identifier key, boolean defaultValue) {
+	public void addConfig(ResourceLocation key, boolean defaultValue) {
 		addConfig(new BooleanConfigEntry(key, defaultValue));
 	}
 
 	@Override
-	public <T extends Enum<T>> void addConfig(Identifier key, T defaultValue) {
+	public <T extends Enum<T>> void addConfig(ResourceLocation key, T defaultValue) {
 		Objects.requireNonNull(defaultValue);
 		addConfig(new EnumConfigEntry<>(key, defaultValue));
 	}
 
 	@Override
-	public void addConfig(Identifier key, String defaultValue, Predicate<String> validator) {
+	public void addConfig(ResourceLocation key, String defaultValue, Predicate<String> validator) {
 		Objects.requireNonNull(defaultValue);
 		Objects.requireNonNull(validator);
 		addConfig(new StringConfigEntry(key, defaultValue, validator));
 	}
 
 	@Override
-	public void addConfig(Identifier key, int defaultValue, int min, int max, boolean slider) {
+	public void addConfig(ResourceLocation key, int defaultValue, int min, int max, boolean slider) {
 		addConfig(new IntConfigEntry(key, defaultValue, min, max, slider));
 	}
 
 	@Override
-	public void addConfig(Identifier key, float defaultValue, float min, float max, boolean slider) {
+	public void addConfig(ResourceLocation key, float defaultValue, float min, float max, boolean slider) {
 		addConfig(new FloatConfigEntry(key, defaultValue, min, max, slider));
 	}
 
 	@Override
-	public void addConfigListener(Identifier key, Consumer<Identifier> listener) {
+	public void addConfigListener(ResourceLocation key, Consumer<ResourceLocation> listener) {
 		Objects.requireNonNull(listener);
 		Preconditions.checkArgument(hasConfig(key), "Unknown config key: %s", key);
 		Objects.requireNonNull(getConfigEntry(key)).addListener(listener);
 	}
 
 	@Override
-	public void setConfigCategoryOverride(Identifier key, Component override) {
+	public void setConfigCategoryOverride(ResourceLocation key, ITextComponent override) {
 		Preconditions.checkArgument(!JadeIds.isAccess(key), "Cannot override option from access category");
 		Preconditions.checkArgument(IPluginConfig.isPrimaryKey(key), "Only primary config key can be overridden");
 		Preconditions.checkArgument(hasConfig(key), "Unknown config key: %s", key);
@@ -228,8 +227,8 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 	}
 
 	@Override
-	public void setConfigCategoryOverride(Identifier key, List<Component> overrides) {
-		for (Component override : overrides) {
+	public void setConfigCategoryOverride(ResourceLocation key, List<ITextComponent> overrides) {
+		for (ITextComponent override : overrides) {
 			setConfigCategoryOverride(key, override);
 		}
 	}
@@ -241,29 +240,29 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 	}
 
 	@Override
-	public Set<Identifier> getConfigKeys(String namespace) {
+	public Set<ResourceLocation> getConfigKeys(String namespace) {
 		return getConfigKeys().stream().filter(id -> id.getNamespace().equals(namespace)).collect(Collectors.toSet());
 	}
 
 	@Override
-	public Set<Identifier> getConfigKeys() {
+	public Set<ResourceLocation> getConfigKeys() {
 		return configEntries.keySet();
 	}
 
 	@Override
-	public boolean hasConfig(Identifier key) {
+	public boolean hasConfig(ResourceLocation key) {
 		return getConfigKeys().contains(key);
 	}
 
 	@Nullable
-	public ConfigEntry<?> getConfigEntry(Identifier key) {
+	public ConfigEntry<?> getConfigEntry(ResourceLocation key) {
 		return configEntries.get(key);
 	}
 
 	public List<Category> getConfigListView(boolean enableAccessibilityPlugins) {
 		Multimap<String, ConfigEntry<?>> categoryMap = ArrayListMultimap.create();
 		configCategoryOverrides.forEach((key, component) -> {
-			categoryMap.put(component.getString(), Objects.requireNonNull(getConfigEntry(key)));
+			categoryMap.put(component.getUnformattedText(), Objects.requireNonNull(getConfigEntry(key)));
 		});
 		configEntries.forEach((key, entry) -> {
 			if (configCategoryOverrides.containsKey(key)) {
@@ -273,11 +272,11 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 				return;
 			}
 			if (!IPluginConfig.isPrimaryKey(key)) {
-				Identifier primaryKey = IPluginConfig.getPrimaryKey(key);
-				Collection<Component> components = configCategoryOverrides.get(primaryKey);
+				ResourceLocation primaryKey = IPluginConfig.getPrimaryKey(key);
+				Collection<ITextComponent> components = configCategoryOverrides.get(primaryKey);
 				if (!components.isEmpty()) {
-					for (Component component : components) {
-						categoryMap.put(component.getString(), entry);
+					for (ITextComponent component : components) {
+						categoryMap.put(component.getUnformattedText(), entry);
 					}
 					return;
 				}
@@ -287,27 +286,27 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 			if (!Jade.ID.equals(namespace) && modName.isPresent()) {
 				categoryMap.put(modName.get(), entry);
 			} else {
-				categoryMap.put(I18n.get(OptionsList.Entry.makeKey("plugin_" + namespace)), entry);
+				categoryMap.put(I18n.format(OptionsList.Entry.makeKey("plugin_" + namespace)), entry);
 			}
 		});
 
 		return categoryMap.asMap().entrySet().stream()
 				.map(e -> new Category(
-						Component.literal(e.getKey()), e.getValue().stream()
+						new TextComponentString(e.getKey()), e.getValue().stream()
 						.sorted(Comparator.comparingInt($ -> WailaCommonRegistration.instance().priorities.getSortedList()
 								.indexOf($.id())))
 						.toList()
 				))
-				.sorted(Comparator.comparingInt(specialOrder()).thenComparing($ -> $.title().getString()))
+				.sorted(Comparator.comparingInt(specialOrder()).thenComparing($ -> $.title().getUnformattedText()))
 				.toList();
 	}
 
 	private static ToIntFunction<Category> specialOrder() {
-		String core = I18n.get(OptionsList.Entry.makeKey("plugin_" + Jade.ID));
-		String debug = I18n.get(OptionsList.Entry.makeKey("plugin_" + Jade.ID + ".debug"));
+		String core = I18n.format(OptionsList.Entry.makeKey("plugin_" + Jade.ID));
+		String debug = I18n.format(OptionsList.Entry.makeKey("plugin_" + Jade.ID + ".debug"));
 		// core is always the first, debug is always the last
 		return category -> {
-			String title = category.title().getString();
+			String title = category.title().getUnformattedText();
 			if (core.equals(title)) {
 				return -1;
 			}
@@ -318,7 +317,7 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 		};
 	}
 
-	public void setServerConfig(Map<Identifier, Object> config) {
+	public void setServerConfig(Map<ResourceLocation, Object> config) {
 		for (ConfigEntry<?> entry : configEntries.values()) {
 			entry.setSyncedValue(null);
 		}
@@ -339,7 +338,7 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 		Jade.config().fixData();
 	}
 
-	public record Category(MutableComponent title, List<ConfigEntry<?>> entries) {
+	public record Category(ITextComponent title, List<ConfigEntry<?>> entries) {
 	}
 
 	public void loadComplete() {
@@ -388,9 +387,9 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 
 	@Override
 	public EmptyAccessor.Builder emptyAccessor() {
-		Minecraft mc = Minecraft.getInstance();
+		Minecraft mc = Minecraft.getMinecraft();
 		return new EmptyAccessorImpl.Builder()
-				.level(Objects.requireNonNull(mc.level))
+				.level(Objects.requireNonNull(mc.world))
 				.player(Objects.requireNonNull(mc.player))
 				.serverConnected(isServerConnected())
 				.serverData(getServerData())
@@ -399,9 +398,9 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 
 	@Override
 	public BlockAccessor.Builder blockAccessor() {
-		Minecraft mc = Minecraft.getInstance();
+		Minecraft mc = Minecraft.getMinecraft();
 		return new BlockAccessorImpl.Builder()
-				.level(Objects.requireNonNull(mc.level))
+				.level(Objects.requireNonNull(mc.world))
 				.player(Objects.requireNonNull(mc.player))
 				.serverConnected(isServerConnected())
 				.serverData(getServerData())
@@ -410,9 +409,9 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 
 	@Override
 	public EntityAccessor.Builder entityAccessor() {
-		Minecraft mc = Minecraft.getInstance();
+		Minecraft mc = Minecraft.getMinecraft();
 		return new EntityAccessorImpl.Builder()
-				.level(Objects.requireNonNull(mc.level))
+				.level(Objects.requireNonNull(mc.world))
 				.player(Objects.requireNonNull(mc.player))
 				.serverConnected(isServerConnected())
 				.serverData(getServerData())
@@ -425,13 +424,13 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 	}
 
 	@Override
-	public Screen createPluginConfigScreen(@Nullable Screen parent, @Nullable Component jumpToCategory) {
+	public GuiScreen createPluginConfigScreen(@Nullable GuiScreen parent, @Nullable ITextComponent jumpToCategory) {
 		Function<OptionsList, OptionsList.@Nullable Entry> jumpTo = null;
 		if (jumpToCategory != null) {
-			String title = jumpToCategory.getString();
+			String title = jumpToCategory.getUnformattedText();
 			jumpTo = options -> {
 				for (OptionsList.Entry entry : options.children()) {
-					if (entry instanceof OptionsList.Title e && e.title().getString().equals(title)) {
+					if (entry instanceof OptionsList.Title e && e.title().getUnformattedText().equals(title)) {
 						return entry;
 					}
 				}
@@ -476,32 +475,32 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 	}
 
 	@Override
-	public @Nullable CompoundTag getServerData() {
+	public @Nullable NBTTagCompound getServerData() {
 		return JadeClient.tickHandler().getData();
 	}
 
 	@Override
-	public void setServerData(CompoundTag tag) {
+	public void setServerData(NBTTagCompound tag) {
 		JadeClient.tickHandler().setData(tag);
 	}
 
 	@Override
-	public ItemStack getBlockCamouflage(LevelAccessor level, BlockPos pos) {
+	public ItemStack getBlockCamouflage(World level, BlockPos pos) {
 		return DatapackBlockManager.getFakeBlock(level, pos);
 	}
 
 	@Override
-	public void markAsClientFeature(Identifier uid) {
+	public void markAsClientFeature(ResourceLocation uid) {
 		clientFeatures.add(uid);
 	}
 
 	@Override
-	public void markAsServerFeature(Identifier uid) {
+	public void markAsServerFeature(ResourceLocation uid) {
 		clientFeatures.remove(uid);
 	}
 
 	@Override
-	public boolean isClientFeature(Identifier uid) {
+	public boolean isClientFeature(ResourceLocation uid) {
 		return clientFeatures.contains(uid);
 	}
 
@@ -517,20 +516,20 @@ public class WailaClientRegistration implements IWailaClientRegistration {
 	}
 
 	@Override
-	public void addEntityVariantMapping(EntityType<?> entityType, @Nullable DataComponentType<?> variantType) {
+	public void addEntityVariantMapping(Class<? extends Entity> entityType, @Nullable Object variantType) {
 		EntityVariantHelper.addVariantMapping(entityType, variantType);
 	}
 
 	@Override
-	public void addVariantType(DataComponentType<?> type, boolean isVariant) {
+	public void addVariantType(Object type, boolean isVariant) {
 		EntityVariantHelper.addVariantType(type, isVariant);
 	}
 
 	@Override
 	public void reloadIgnoreLists() {
-		ClientPacketListener connection = Minecraft.getInstance().getConnection();
+		NetHandlerPlayClient connection = Minecraft.getMinecraft().getConnection();
 		if (connection != null) {
-			WailaCommonRegistration.instance().reloadOperations(connection.registryAccess());
+			WailaCommonRegistration.instance().reloadOperations();
 		}
 	}
 

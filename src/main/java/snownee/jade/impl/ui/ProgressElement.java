@@ -5,10 +5,8 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.network.chat.Component;
-import net.minecraft.util.Mth;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.text.ITextComponent;
 import snownee.jade.JadeClient;
 import snownee.jade.api.JadeIds;
 import snownee.jade.api.theme.IThemeHelper;
@@ -61,12 +59,12 @@ public class ProgressElement extends ResizeableElement implements StyledElement 
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-		view.boxStyle.render(graphics, this, getX(), getY(), width, height, IDisplayHelper.get().opacity());
+	public void extractRenderState(int mouseX, int mouseY, float partialTicks) {
+		view.boxStyle.render(this, getX(), getY(), width, height, IDisplayHelper.get().opacity());
 
 		if (track != null) {
 			track.setProgress(view.parts);
-			track.update(Minecraft.getInstance().getDeltaTracker().getRealtimeDeltaTicks());
+			track.update(Minecraft.getMinecraft().timer.renderPartialTicks);
 		}
 
 		int borderWidth = view.boxStyle.borderWidth();
@@ -87,7 +85,6 @@ public class ProgressElement extends ResizeableElement implements StyledElement 
 			}
 			progress = Math.min(progress + partProgress, 1F);
 			start = renderPart(
-					graphics,
 					partialTicks,
 					part,
 					partProgress,
@@ -103,8 +100,6 @@ public class ProgressElement extends ResizeableElement implements StyledElement 
 		}
 		if (progress > 0 && view.style.foreground() != null) {
 			DisplayHelper.INSTANCE.blitSprite(
-					graphics,
-					RenderPipelines.GUI_TEXTURED,
 					Objects.requireNonNull(view.style.foreground()),
 					freeX,
 					freeY,
@@ -113,12 +108,11 @@ public class ProgressElement extends ResizeableElement implements StyledElement 
 		}
 
 		if (view.text != null) {
-			IDisplayHelper.get().drawText(graphics, view.text, getX() + 4, getY() + 3, IThemeHelper.get().getNormalColor());
+			IDisplayHelper.get().drawText(view.text, getX() + 4, getY() + 3, IThemeHelper.get().getNormalColor());
 		}
 	}
 
 	private float renderPart(
-			GuiGraphicsExtractor graphics,
 			float partialTicks,
 			ProgressView.Part part,
 			float partProgress,
@@ -129,7 +123,7 @@ public class ProgressElement extends ResizeableElement implements StyledElement 
 			int height,
 			boolean isLast) {
 		float partWidth = Math.min(partProgress * width, width - start);
-		int roundedPartWidth = Mth.ceil(partWidth);
+		int roundedPartWidth = MathHelper.ceil(partWidth);
 		Element overlay = part.overlay();
 		if (overlay == null) {
 			DEFAULT_OVERLAY.setColor(part.themeColor());
@@ -140,15 +134,15 @@ public class ProgressElement extends ResizeableElement implements StyledElement 
 //		graphics.enableScissor(x + (int) start, y, x + (int) start + roundedPartWidth, y + height);
 		// we can only draw a sprite from its top-left corner, so only makes the last part more detailed
 		if (isLast && view.style.foreground() == null && overlay instanceof ProgressOverlayElement element &&
-				element.canUseFloatingRect(graphics)) {
+				element.canUseFloatingRect()) {
 			element.setFloatingRect(x + start, y, partWidth, height);
-			element.extractRenderState(graphics, -1, -1, partialTicks);
+			element.extractRenderState(-1, -1, partialTicks);
 			element.setFloatingRect(null);
 //			graphics.disableScissor();
 			return start + partWidth;
 		} else {
 			resizeElement(overlay, x + (int) start, y, roundedPartWidth, height);
-			overlay.extractRenderState(graphics, -1, -1, partialTicks);
+			overlay.extractRenderState(-1, -1, partialTicks);
 //			graphics.disableScissor();
 			return start + roundedPartWidth;
 		}
@@ -163,7 +157,7 @@ public class ProgressElement extends ResizeableElement implements StyledElement 
 	}
 
 	@Override
-	public @Nullable Component getNarration() {
+	public @Nullable ITextComponent getNarration() {
 		return view.text == null ? null : NarratableComponent.getNarration(view.text);
 	}
 

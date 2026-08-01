@@ -15,67 +15,61 @@ import org.jspecify.annotations.Nullable;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.mojang.blaze3d.platform.InputConstants;
 
 import it.unimi.dsi.fastutil.booleans.BooleanConsumer;
 import it.unimi.dsi.fastutil.floats.FloatUnaryOperator;
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.InputType;
-import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ComponentPath;
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractStringWidget;
-import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.ContainerObjectSelectionList;
-import net.minecraft.client.gui.components.CycleButton;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.StringWidget;
-import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.narration.NarratableEntry;
-import net.minecraft.client.gui.narration.NarratedElementType;
-import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.gui.navigation.FocusNavigationEvent;
-import net.minecraft.client.gui.navigation.ScreenDirection;
-import net.minecraft.client.gui.navigation.ScreenRectangle;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.resources.language.I18n;
-import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.Mth;
-import net.minecraft.util.StringUtil;
-import net.minecraft.util.Util;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.GuiListExtended;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.client.settings.KeyBinding;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraftforge.client.settings.KeyModifier;
 import snownee.jade.Jade;
 import snownee.jade.api.ui.JadeUI;
 import snownee.jade.gui.BaseOptionsScreen;
 import snownee.jade.gui.PreviewOptionsScreen;
-import snownee.jade.gui.WailaConfigScreen;
 import snownee.jade.gui.config.value.CycleOptionValue;
 import snownee.jade.gui.config.value.InputOptionValue;
 import snownee.jade.gui.config.value.OptionValue;
 import snownee.jade.gui.config.value.SliderOptionValue;
 import snownee.jade.util.ClientProxy;
+import snownee.jade.util.JadeFont;
 import snownee.jade.util.SmoothChasingValue;
 
-public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry> {
+/**
+ * 1.12.2: the modern {@code ContainerObjectSelectionList} is replaced by {@link GuiListExtended}, but the
+ * entries carry their own widgets (which vanilla {@code GuiSlot} has no notion of), so scrolling, wheel input,
+ * selection and drawing are driven by {@link #extractRenderState}/{@link #mouseScrolled} and friends from the
+ * owning screen. Vanilla's wheel handler ({@code slotHeight/2} per notch) is skipped in favor of the modern
+ * 3-row rate.
+ */
+public class OptionsList extends GuiListExtended {
 
-	public static final Component OPTION_ON = CommonComponents.OPTION_ON.copy().withColor(0xFFB9F6CA);
-	public static final Component OPTION_OFF = CommonComponents.OPTION_OFF.copy().withColor(0xFFFF8A80);
+	public static final ITextComponent OPTION_ON = new TextComponentTranslation("options.on")
+			.setStyle(new Style().setColor(TextFormatting.GREEN));
+	public static final ITextComponent OPTION_OFF = new TextComponentTranslation("options.off")
+			.setStyle(new Style().setColor(TextFormatting.RED));
 	public final Set<OptionsList.Entry> forcePreview = Sets.newIdentityHashSet();
 	protected final List<Entry> entries = Lists.newArrayList();
 	private final @Nullable Runnable diskWriter;
 	public @Nullable Title currentTitle;
 	public @Nullable OptionValue<?> invalidEntry;
-	public @Nullable KeyMapping selectedKey;
+	public @Nullable KeyBinding selectedKey;
 	private final BaseOptionsScreen owner;
 	private final SmoothChasingValue smoothScroll;
 	private @Nullable Entry defaultParent;
+	private @Nullable Entry hovered;
+	private boolean dragging;
+	private @Nullable Entry selected;
 
 	public OptionsList(
 			BaseOptionsScreen owner,
@@ -86,8 +80,9 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 			int height,
 			int entryHeight,
 			@Nullable Runnable diskWriter) {
-		super(client, width, height, y, entryHeight);
-		setX(x);
+		super(client, width, height, y, y + height, entryHeight);
+		left = x;
+		right = x + width;
 		this.owner = owner;
 		this.diskWriter = diskWriter;
 		smoothScroll = new SmoothChasingValue().withSpeed(0.6F);
@@ -97,127 +92,149 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 		this(owner, client, x, y, width, height, entryHeight, null);
 	}
 
-	private static void walkChildren(Entry entry, Consumer<Entry> consumer) {
-		consumer.accept(entry);
-		for (Entry child : entry.children) {
-			walkChildren(child, consumer);
-		}
+	public BaseOptionsScreen owner() {
+		return owner;
 	}
-
 	@Override
-	public int getRowWidth() {
+	public int getListWidth() {
 		return Math.min(width, 300);
 	}
 
-	//TODO: check if it is still needed
 	@Override
-	protected int scrollBarX() {
+	protected int getScrollBarX() {
 		return owner.width - 6;
 	}
 
 	@Override
+	public int getSize() {
+		return children().size();
+	}
+
+	@Override
+	public GuiListExtended.IGuiListEntry getListEntry(int index) {
+		return children().get(index);
+	}
+
 	public void setScrollAmount(double scroll) {
 		if (ClientProxy.metadata.hasSmoothScroll()) {
-			super.setScrollAmount(scroll);
+			amountScrolled = (float) scroll;
+			bindAmountScrolled();
 		} else {
-			smoothScroll.target(Mth.clamp((float) scroll, 0, maxScrollAmount()));
+			smoothScroll.target(MathHelper.clamp((float) scroll, 0, getMaxScroll()));
 		}
 	}
 
 	public void forceSetScrollAmount(double scroll) {
 		smoothScroll.start((float) scroll);
-		super.setScrollAmount(scroll);
+		amountScrolled = (float) scroll;
+		bindAmountScrolled();
 	}
 
-	@Override
-	protected double scrollRate() {
-		return defaultEntryHeight * (!ClientProxy.metadata.hasFastScroll() && JadeUI.hasControlDown() ? 9 : 3);
+	/** Modern {@code scrollRate}: 3 rows per wheel notch, 9 when fast-scroll is unavailable and Ctrl is held. */
+	protected int scrollRate() {
+		return slotHeight * (!ClientProxy.metadata.hasFastScroll() && JadeUI.hasControlDown() ? 9 : 3);
 	}
-
-	@Override
-	public boolean mouseDragged(MouseButtonEvent mouseButtonEvent, double d, double e) {
-		smoothScroll.value = smoothScroll.getTarget();
-		super.setScrollAmount(smoothScroll.value);
-		return super.mouseDragged(mouseButtonEvent, d, e);
-	}
-
-	@Nullable
-	@Override
-	public ComponentPath nextFocusPath(FocusNavigationEvent event) {
-		ComponentPath componentPath = super.nextFocusPath(event);
-		OptionsNav.Entry navEntry = owner.optionsNav().getCurrentEntry();
-		if (componentPath != null) {
-			return componentPath;
+	/** Wheel input (modern {@code mouseScrolled}); vanilla's {@code slotHeight/2} wheel handler is not used. */
+	public void mouseScrolled(int amount) {
+		if (amount == 0) {
+			return;
 		}
-		if (navEntry != null && event instanceof FocusNavigationEvent.ArrowNavigation(ScreenDirection direction, ScreenRectangle _) &&
-				direction == ScreenDirection.LEFT) {
-			return ComponentPath.path(navEntry, owner.optionsNav());
+		int rate = scrollRate();
+		if (amount > 0) {
+			amountScrolled -= rate;
+		} else {
+			amountScrolled += rate;
 		}
-		return null;
+		bindAmountScrolled();
 	}
 
-	// public-access it
-	@Override
 	public void scrollToEntry(Entry entry) {
-		super.scrollToEntry(entry);
+		int index = children().indexOf(entry);
+		if (index < 0) {
+			return;
+		}
+		amountScrolled = Math.max(0, index * slotHeight - 4);
+		bindAmountScrolled();
 	}
 
-	@Override
 	protected boolean entriesCanBeSelected() {
 		return !PreviewOptionsScreen.isAdjustingPosition();
 	}
 
 	@Override
-	protected void extractListSeparators(GuiGraphicsExtractor guiGraphics) {
-		Identifier Identifier2 = this.minecraft.level == null ? Screen.FOOTER_SEPARATOR : Screen.INWORLD_FOOTER_SEPARATOR;
-		guiGraphics.blit(RenderPipelines.GUI_TEXTURED, Identifier2, 0, this.getBottom(), 0.0F, 0.0F, owner.width, 2, 32, 2);
+	protected void drawBackground() {
+		// modern Jade renders no list background; the screen draws the base background
 	}
 
-	@Override
-	protected void extractSelection(GuiGraphicsExtractor guiGraphics, Entry entry, int i) {
-		int outlineX0 = getX();
-		int outlineY0 = entry.getY();
-		int outlineX1 = outlineX0 + getWidth();
-		int outlineY1 = outlineY0 + entry.getHeight();
-		guiGraphics.fill(outlineX0, outlineY0, outlineX1, outlineY1, 0x33FFFFFF);
-	}
-
-	@Override
-	public void extractWidgetRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTicks) {
-		float deltaTicks = Minecraft.getInstance().getDeltaTracker().getRealtimeDeltaTicks();
-		smoothScroll.tick(deltaTicks);
+	/**
+	 * Renders the list content (entries, selection, scrollbar). Called from the owning screen's drawScreen;
+	 * replaces the modern {@code extractWidgetRenderState}. Entry rendering itself is dispatched through the
+	 * inherited {@code GuiListExtended.drawSlot} -> {@code Entry.drawEntry} -> {@code extractContent} chain.
+	 */
+	public void extractRenderState(int mouseX, int mouseY, float partialTicks) {
+		if (!visible) {
+			return;
+		}
+		// modern extractWidgetRenderState: tick the chasing scroll value and commit it to the
+		// vanilla scroll when it has settled (smoothScroll is only used on non-smooth clients,
+		// where setScrollAmount only targets it and something must drive it each frame)
+		smoothScroll.tick(partialTicks);
 		if (!ClientProxy.metadata.hasSmoothScroll() && smoothScroll.isMoving()) {
-			super.setScrollAmount(Math.round(smoothScroll.value));
+			amountScrolled = Math.round(smoothScroll.value);
 		}
-		hovered = null;
-		if (!PreviewOptionsScreen.isAdjustingPosition()) {
-			InputType lastInputType = minecraft.getLastInputType();
-			mouseY = Math.min(mouseY, getRowRight());
-			if (lastInputType.isMouse() && isMouseOver(mouseX, mouseY)) {
-				hovered = getEntryAtPosition(mouseX, mouseY);
-			} else if (lastInputType.isKeyboard() && getFocused() != null) {
-				hovered = getFocused();
-			}
-			if (hovered instanceof Title title) {
-				setSelected(null);
-				currentTitle = title;
-			} else {
-				setSelected(hovered);
-				if (hovered != null && hovered.root() instanceof Title title) {
-					currentTitle = title;
-				}
-			}
-		}
+		this.mouseX = mouseX;
+		this.mouseY = mouseY;
+		updateHovered(mouseX, mouseY);
+		bindAmountScrolled();
+		int insideLeft = left + width / 2 - getListWidth() / 2 + 2;
+		int insideTop = top + 4 - (int) amountScrolled;
+		drawSelectionBox(insideLeft, insideTop, mouseX, mouseY, partialTicks);
+		drawScrollbar();
+	}
 
-		enableScissor(guiGraphics);
-		extractListItems(guiGraphics, mouseX, mouseY, partialTicks);
-		guiGraphics.disableScissor();
-		extractListSeparators(guiGraphics);
-		extractScrollbar(guiGraphics, mouseX, mouseY);
+	private void updateHovered(int mouseX, int mouseY) {
+		hovered = null;
+		if (!entriesCanBeSelected()) {
+			return;
+		}
+		int index = getSlotIndexFromScreenCoords(mouseX, mouseY);
+		if (index >= 0 && index < children().size()) {
+			hovered = children().get(index);
+		}
+		if (hovered instanceof Title) {
+			setSelected(null);
+			currentTitle = (Title) hovered;
+		} else {
+			setSelected(hovered);
+			if (hovered != null && hovered.root() instanceof Title) {
+				currentTitle = (Title) hovered.root();
+			}
+		}
+	}
+
+	private void drawScrollbar() {
+		int j1 = getMaxScroll();
+		if (j1 > 0) {
+			int i = getScrollBarX();
+			int j = i + 6;
+			int k1 = (bottom - top) * (bottom - top) / getContentHeight();
+			k1 = MathHelper.clamp(k1, 32, bottom - top - 8);
+			int l1 = (int) amountScrolled * (bottom - top - k1) / j1 + top;
+			if (l1 < top) {
+				l1 = top;
+			}
+			Gui.drawRect(i, top, j, bottom, 0xFF000000);
+			Gui.drawRect(i, l1, j, l1 + k1, 0xFF808080);
+			Gui.drawRect(i, l1, j - 1, l1 + k1 - 1, 0xFFC0C0C0);
+		}
 	}
 
 	public void save() {
-		children().stream().filter(e -> e instanceof OptionValue).map(e -> (OptionValue<?>) e).forEach(OptionValue::save);
+		for (Entry entry : children()) {
+			if (entry instanceof OptionValue) {
+				((OptionValue<?>) entry).save();
+			}
+		}
 		if (diskWriter != null) {
 			diskWriter.run();
 		}
@@ -235,17 +252,34 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 
 	@Nullable
 	public Entry getEntryAt(double x, double y) {
-		return getEntryAtPosition(x, y);
+		int index = getSlotIndexFromScreenCoords((int) x, (int) y);
+		if (index >= 0 && index < children().size()) {
+			return children().get(index);
+		}
+		return null;
 	}
 
-	@Override
-	public int getRowTop(int i) {
-		return super.getRowTop(i);
+	/** 1.12.2: GuiSlot has no getRowTop -- the list computes row positions itself. */
+	public int getRowTop(int index) {
+		return top + 4 - (int) amountScrolled + index * slotHeight + headerPadding;
 	}
 
-	@Override
-	public int getRowBottom(int i) {
-		return super.getRowBottom(i);
+	/** 1.12.2: GuiSlot has no getRowBottom. */
+	public int getRowBottom(int index) {
+		return getRowTop(index) + slotHeight;
+	}
+
+	public int getRowLeft() {
+		return left + width / 2 - getListWidth() / 2;
+	}
+
+	public int getRowRight() {
+		return left + width / 2 + getListWidth() / 2;
+	}
+
+	/** 1.12.2: GuiSlot has no getRowWidth; used by the tooltip positioner. */
+	public int getRowWidth() {
+		return getRowRight() - getRowLeft();
 	}
 
 	public void setDefaultParent(Entry defaultParent) {
@@ -286,8 +320,8 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 			String optionName,
 			Supplier<Boolean> getter,
 			BooleanConsumer setter,
-			@Nullable Consumer<CycleButton.Builder<Boolean>> builderConsumer) {
-		CycleButton.Builder<Boolean> builder = CycleButton.booleanBuilder(OPTION_ON, OPTION_OFF, getter.get());
+			@Nullable Consumer<CycleOptionValue.Builder<Boolean>> builderConsumer) {
+		CycleOptionValue.Builder<Boolean> builder = CycleOptionValue.Builder.booleanBuilder(OPTION_ON, OPTION_OFF, getter.get());
 		if (builderConsumer != null) {
 			builderConsumer.accept(builder);
 		}
@@ -302,23 +336,16 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 			String optionName,
 			Supplier<T> getter,
 			Consumer<T> setter,
-			@Nullable Consumer<CycleButton.Builder<T>> builderConsumer) {
+			@Nullable Consumer<CycleOptionValue.Builder<T>> builderConsumer) {
 		List<T> values = Arrays.asList(getter.get().getDeclaringClass().getEnumConstants());
-		CycleButton.Builder<T> builder = CycleButton.builder(
-				v -> {
-					String name = v.name().toLowerCase(Locale.ENGLISH);
-					return switch (name) {
-						case "on" -> OPTION_ON;
-						case "off" -> OPTION_OFF;
-						default -> Entry.makeTitle(optionName + "_" + name);
-					};
-				}, getter.get()).withValues(values);
+		CycleOptionValue.Builder<T> builder = CycleOptionValue.Builder.enumBuilder(getter.get());
+		builder.withValues(values);
 		builder.withTooltip(v -> {
-			String key = OptionsList.Entry.makeKey(optionName + "_" + v.name().toLowerCase(Locale.ENGLISH) + "_desc");
+			String key = Entry.makeKey(optionName + "_" + v.name().toLowerCase(Locale.ENGLISH) + "_desc");
 			if (!JadeUI.hasTranslation(key)) {
 				return null;
 			}
-			return Tooltip.create(WailaConfigScreen.processBuiltInVariables(Component.translatable(key)));
+			return new TextComponentTranslation(key);
 		});
 		if (builderConsumer != null) {
 			builderConsumer.accept(builder);
@@ -331,11 +358,12 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 			Supplier<T> getter,
 			List<T> values,
 			Consumer<T> setter,
-			Function<T, Component> nameProvider) {
-		return add(new CycleOptionValue<>(optionName, CycleButton.builder(nameProvider, getter.get()).withValues(values), getter, setter));
+			Function<T, ITextComponent> nameProvider) {
+		CycleOptionValue.Builder<T> builder = new CycleOptionValue.Builder<>(nameProvider, values, getter.get());
+		return add(new CycleOptionValue<>(optionName, builder, getter, setter));
 	}
 
-	public void keybind(KeyMapping keybind) {
+	public void keybind(KeyBinding keybind) {
 		add(new KeybindOptionButton(this, keybind));
 	}
 
@@ -352,8 +380,8 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 
 	public void updateSearch(String search) {
 		clearEntries();
-		if (search.isBlank()) {
-			entries.forEach(this::addEntry);
+		if (search.trim().isEmpty()) {
+			entries.forEach(this::addEntryToChildren);
 			return;
 		}
 		Set<Entry> matches = Sets.newLinkedHashSet();
@@ -379,11 +407,27 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 		}
 		for (Entry entry : entries) {
 			if (matches.contains(entry)) {
-				addEntry(entry);
+				addEntryToChildren(entry);
 			}
 		}
 		if (matches.isEmpty()) {
-			addEntry(new Title(Component.translatable("gui.jade.no_results").withStyle(ChatFormatting.GRAY)));
+			addEntryToChildren(new Title(new TextComponentTranslation("gui.jade.no_results")
+					.setStyle(new Style().setColor(TextFormatting.GRAY))));
+		}
+	}
+
+	private void addEntryToChildren(Entry entry) {
+		children0.add(entry);
+	}
+
+	private void clearEntries() {
+		children0.clear();
+	}
+
+	private static void walkChildren(Entry entry, Consumer<Entry> consumer) {
+		consumer.accept(entry);
+		for (Entry child : entry.children) {
+			walkChildren(child, consumer);
 		}
 	}
 
@@ -395,14 +439,10 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 				break;
 			}
 		}
-		if (invalidEntry == null) {
-			Objects.requireNonNull(owner.saveButton).setTooltip(null);
-		} else {
-			Objects.requireNonNull(owner.saveButton).setTooltip(Tooltip.create(Component.translatable("gui.jade.invalid_value_cant_save")));
-		}
+		owner.saveButtonTooltip = invalidEntry == null ? null : new TextComponentTranslation("gui.jade.invalid_value_cant_save");
 	}
 
-	public void updateOptionValue(@Nullable Identifier key) {
+	public void updateOptionValue(@Nullable ResourceLocation key) {
 		for (Entry entry : entries) {
 			if (entry instanceof OptionValue<?> value && (key == null || key.equals(value.getId()))) {
 				value.updateValue();
@@ -411,7 +451,7 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 	}
 
 	public void showOnTop(Entry entry) {
-		setScrollAmount(defaultEntryHeight * children().indexOf(entry) + 1);
+		setScrollAmount(slotHeight * children().indexOf(entry) + 1);
 		if (entry instanceof Title title) {
 			currentTitle = title;
 		}
@@ -425,52 +465,130 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 		}
 	}
 
-	@Override
-	public boolean keyPressed(KeyEvent keyEvent) {
+	/** Key capture while a keybind is being bound (modern {@code keyPressed}). Returns true if consumed. */
+	public boolean keyPressed(char typedChar, int keyCode) {
 		if (selectedKey != null) {
-			if (keyEvent.isEscape()) {
-				selectedKey.setKey(InputConstants.UNKNOWN);
+			if (keyCode == 1) { // ESC
+				selectedKey.setKeyModifierAndCode(KeyModifier.NONE, 0);
 			} else {
-				selectedKey.setKey(InputConstants.getKey(keyEvent));
+				selectedKey.setKeyModifierAndCode(
+						KeyModifier.getActiveModifier(), keyCode);
 			}
 			selectedKey = null;
 			resetMappingAndUpdateButtons();
 			return true;
 		}
-		return super.keyPressed(keyEvent);
+		return false;
 	}
 
-	@Override
-	public boolean mouseClicked(MouseButtonEvent event, boolean bl) {
+	/** Mouse click routing (modern {@code mouseClicked}). Consumes the click when capturing a keybind. */
+	public boolean mouseClickedInternal(int mouseX, int mouseY, int mouseButton) {
 		if (selectedKey != null) {
-			selectedKey.setKey(InputConstants.Type.MOUSE.getOrCreate(event.button()));
-			this.selectedKey = null;
+			selectedKey.setKeyModifierAndCode(
+					KeyModifier.getActiveModifier(), -100 + mouseButton);
+			selectedKey = null;
 			resetMappingAndUpdateButtons();
+			return true;
+		}
+		if (!isMouseYWithinSlotBounds(mouseY)) {
 			return false;
 		}
-		return super.mouseClicked(event, bl);
+		int i = getSlotIndexFromScreenCoords(mouseX, mouseY);
+		if (i >= 0 && i < children().size()) {
+			int j = left + width / 2 - getListWidth() / 2 + 2;
+			int k = top + 4 - getAmountScrolled() + i * slotHeight + headerPadding;
+			int l = mouseX - j;
+			int i1 = mouseY - k;
+			Entry entry = children().get(i);
+			if (entry.mousePressed(i, mouseX, mouseY, mouseButton, l, i1)) {
+				dragging = true;
+			}
+		}
+		return false;
+	}
+
+	/** Drag continuation (modern {@code mouseDragged}) driven from the screen's mouseClickMove. */
+	public void mouseDragged(int mouseX, int mouseY) {
+		if (dragging) {
+			for (Entry entry : children()) {
+				entry.mouseDragged(mouseX, mouseY);
+			}
+		}
 	}
 
 	@Override
-	public void setSelected(OptionsList.@Nullable Entry entry) {
+	public boolean mouseReleased(int mouseX, int mouseY, int mouseButton) {
+		dragging = false;
+		for (Entry entry : children()) {
+			entry.mouseReleased(0, mouseX, mouseY, mouseButton, 0, 0);
+		}
+		return false;
+	}
+
+	public boolean isMouseOver(int mouseX, int mouseY) {
+		return isMouseYWithinSlotBounds(mouseY) && mouseX >= left && mouseX <= right;
+	}
+
+	public boolean isDragging() {
+		return dragging;
+	}
+
+	public @Nullable Entry getSelected() {
+		return selected;
+	}
+
+	public void setSelected(@Nullable Entry entry) {
 		if (selected == entry) {
 			return;
 		}
 		selected = entry;
-		if (entry != null && minecraft.getLastInputType().isKeyboard()) {
-			scrollToEntry(entry);
+	}
+
+	public List<Entry> children() {
+		return children0;
+	}
+
+	/** The displayed (search-filtered) entries. */
+	protected final List<Entry> children0 = Lists.newArrayList();
+
+	/** Toggling button used for the preview-overlay toggle (modern CycleButton). */
+	public static class OptionButtonLike extends GuiButton {
+
+		private java.util.function.Consumer<OptionButtonLike> onPress = $ -> {
+		};
+
+		public OptionButtonLike(ITextComponent message, ITextComponent title, int x, int y, int width, int height) {
+			super(0, x, y, width, height, message.getFormattedText());
+		}
+
+		public void setOnPress(java.util.function.Consumer<OptionButtonLike> onPress) {
+			this.onPress = onPress;
+		}
+
+		/** 1.12.2: GuiButton.displayString is protected, so screens update the label through this setter. */
+		public void setMessage(ITextComponent message) {
+			displayString = message.getFormattedText();
+		}
+
+		@Override
+		public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+			if (super.mousePressed(mc, mouseX, mouseY)) {
+				onPress.accept(this);
+				return true;
+			}
+			return false;
 		}
 	}
 
 	public static class EntryWidget {
-		public final AbstractWidget widget;
+		public final JadeWidget widget;
 		public int offsetX;
 
-		public EntryWidget(AbstractWidget widget) {
+		public EntryWidget(JadeWidget widget) {
 			this.widget = widget;
 		}
 
-		public EntryWidget(AbstractWidget widget, int offsetX, int offsetY, boolean floatRight) {
+		public EntryWidget(JadeWidget widget, int offsetX, int offsetY, boolean floatRight) {
 			this(widget);
 			this.offsetX = offsetX;
 			this.offsetY = offsetY;
@@ -481,51 +599,142 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 		public boolean floatRight;
 	}
 
-	public static class Entry extends ContainerObjectSelectionList.Entry<Entry> {
+	public static class Entry implements IGuiListEntry {
 
 		protected final List<String> messages = Lists.newArrayList();
-		private final List<AbstractWidget> rawWidgets = Lists.newArrayList();
+		private final List<JadeWidget> rawWidgets = Lists.newArrayList();
 		protected final List<EntryWidget> widgets = Lists.newArrayList();
-		protected List<Component> description = List.of();
+		protected List<ITextComponent> description = List.of();
 		private @Nullable Entry parent;
 		private List<Entry> children = List.of();
-		protected AbstractStringWidget title;
-		protected Font font;
-		private @Nullable AbstractWidget mainWidget;
+		protected TitleWidget title;
+		protected JadeFont font;
+		private @Nullable JadeWidget mainWidget;
 		private final List<Consumer<Entry>> resizeListeners = Lists.newArrayList();
+		protected int contentX;
+		protected int contentY;
+		protected int contentWidth;
+		protected int contentHeight;
+		private boolean hovered;
 
-		public Entry(AbstractStringWidget title) {
+		public Entry(TitleWidget title) {
 			this.title = title;
-			font = title.getFont();
+			font = title.font();
 			addWidget(new EntryWidget(title, getTextX(), getTextY(), false));
-			addMessage(title.getMessage().getString());
+			addMessage(title.getString());
 		}
 
-		public Entry(Component component) {
-			StringWidget widget = new StringWidget(component, Minecraft.getInstance().font);
-			this(widget);
-			addResizeListener($ -> {
-				widget.setMaxWidth($.getContentWidth() - $.getTextX() - 110, StringWidget.TextOverflow.SCROLLING);
-			});
+		public Entry(ITextComponent component) {
+			this(new TitleWidget(component));
 		}
 
-		public static MutableComponent makeTitle(String key) {
-			return Component.translatable(makeKey(key));
+		public static ITextComponent makeTitle(String key) {
+			return new TextComponentTranslation(makeKey(key));
 		}
 
 		public static String makeKey(String key) {
-			return Util.makeDescriptionId("config", Identifier.fromNamespaceAndPath(Jade.ID, key));
+			return "config." + Jade.ID + "." + key;
 		}
 
 		@Override
+		public void updatePosition(int slotIndex, int x, int y, float partialTicks) {
+			// no-op: positions are computed at draw time
+		}
+
+		@Override
+		public void drawEntry(int slotIndex, int x, int y, int listWidth, int slotHeight, int mouseX, int mouseY, boolean isSelected, float partialTicks) {
+			contentX = x;
+			contentY = y;
+			contentWidth = listWidth;
+			contentHeight = slotHeight;
+			extractContent(mouseX, mouseY, isSelected, partialTicks);
+		}
+
+		@Override
+		public boolean mousePressed(int slotIndex, int mouseX, int mouseY, int mouseEvent, int relativeX, int relativeY) {
+			for (EntryWidget widget : widgets) {
+				JadeWidget rawWidget = widget.widget;
+				if (rawWidget instanceof TitleWidget) {
+					continue;
+				}
+				int x = widgetX(widget);
+				int y = contentY + contentHeight / 2 + widget.offsetY;
+				if (mouseX >= x && mouseX < x + rawWidget.getWidth() && mouseY >= y && mouseY < y + rawWidget.getHeight()) {
+					if (rawWidget instanceof JadeWidget.Button button) {
+						GuiButton guiButton = button.button;
+						if (guiButton instanceof CycleOptionValue.CycleButton<?> || guiButton instanceof SliderOptionValue.Slider) {
+							// cycling/slider buttons own their press handling (cycle / setValueFromMouse)
+							if (guiButton.mousePressed(Minecraft.getMinecraft(), mouseX, mouseY)) {
+								guiButton.playPressSound(Minecraft.getMinecraft().getSoundHandler());
+								guiButton.mouseReleased(mouseX, mouseY);
+							}
+						} else if (button.button.mousePressed(Minecraft.getMinecraft(), mouseX, mouseY)) {
+							button.button.playPressSound(Minecraft.getMinecraft().getSoundHandler());
+							button.button.mouseReleased(mouseX, mouseY);
+						}
+						return true;
+					}
+					if (rawWidget instanceof JadeWidget.TextField textField) {
+						textField.textField.mouseClicked(mouseX, mouseY, mouseEvent);
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		@Override
+		public void mouseReleased(int slotIndex, int x, int y, int mouseEvent, int relativeX, int relativeY) {
+			// button mouseReleased handled synchronously in mousePressed; nothing left to do
+		}
+
+		public void mouseDragged(int mouseX, int mouseY) {
+			// slider drag support: re-route to the slider button
+			for (EntryWidget widget : widgets) {
+				if (widget.widget instanceof JadeWidget.Button button && button.button instanceof SliderOptionValue.Slider slider) {
+					slider.mouseDragged(mouseX, mouseY);
+				}
+			}
+		}
+
+		public void extractContent(int mouseX, int mouseY, boolean hovered, float partialTicks) {
+			this.hovered = hovered;
+			for (EntryWidget widget : widgets) {
+				JadeWidget rawWidget = widget.widget;
+				int x;
+				if (widget.floatRight) {
+					x = contentWidth - 110 + widget.offsetX;
+				} else {
+					x = widget.offsetX;
+				}
+				rawWidget.setX(contentX + x);
+				rawWidget.setY(contentY + contentHeight / 2 + widget.offsetY);
+				if (rawWidget instanceof JadeWidget.TextField textField && textField.textField instanceof NotUglyEditBox editBox) {
+					editBox.hovered = isMouseOverWidget(rawWidget, mouseX, mouseY);
+				}
+				rawWidget.extractRenderState(mouseX, mouseY, partialTicks);
+			}
+		}
+
+		private boolean isMouseOverWidget(JadeWidget widget, int mouseX, int mouseY) {
+			return mouseX >= widget.getX() && mouseX < widget.getX() + widget.getWidth()
+					&& mouseY >= widget.getY() && mouseY < widget.getY() + widget.getHeight();
+		}
+
+		private int widgetX(EntryWidget widget) {
+			if (widget.floatRight) {
+				return contentX + contentWidth - 110 + widget.offsetX;
+			}
+			return contentX + widget.offsetX;
+		}
+
 		public void setWidth(int width) {
-			super.setWidth(width);
+			contentWidth = width;
 			notifyResizeListeners();
 		}
 
-		@Override
 		public void setHeight(int height) {
-			super.setHeight(height);
+			contentHeight = height;
 			notifyResizeListeners();
 		}
 
@@ -546,67 +755,45 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 			}
 		}
 
-		public @Nullable AbstractWidget mainWidget() {
+		public @Nullable JadeWidget mainWidget() {
 			return mainWidget;
 		}
 
 		@SuppressWarnings("UnusedReturnValue")
-		public EntryWidget addWidget(AbstractWidget widget, int offsetX) {
+		public EntryWidget addWidget(JadeWidget widget, int offsetX) {
 			return addWidget(new EntryWidget(widget, offsetX, -widget.getHeight() / 2, true));
 		}
 
 		public EntryWidget addWidget(EntryWidget widget) {
 			widgets.add(widget);
 			rawWidgets.add(widget.widget);
-			if (mainWidget == null && !(widget.widget instanceof AbstractStringWidget)) {
+			if (mainWidget == null && !(widget.widget instanceof TitleWidget)) {
 				mainWidget = widget.widget;
 			}
 			return widget;
 		}
 
-		@Override
-		public List<? extends AbstractWidget> children() {
+		public List<JadeWidget> children() {
 			return rawWidgets;
 		}
 
-		@Override
-		public List<? extends NarratableEntry> narratables() {
-			return children();
-		}
-
-		@Override
-		public void extractContent(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, boolean hovered, float deltaTime) {
-			for (EntryWidget widget : widgets) {
-				AbstractWidget rawWidget = widget.widget;
-				int x;
-				if (widget.floatRight) {
-					x = getContentWidth() - 110 + widget.offsetX;
-				} else {
-					x = widget.offsetX;
-				}
-				rawWidget.setX(getContentX() + x);
-				rawWidget.setY(getContentY() + getContentHeight() / 2 + widget.offsetY);
-				rawWidget.extractRenderState(guiGraphics, mouseX, mouseY, deltaTime);
-			}
-		}
-
 		public void setDisabled(boolean disabled) {
-			for (AbstractWidget widget : rawWidgets) {
-				if (widget instanceof AbstractStringWidget) {
+			for (JadeWidget widget : rawWidgets) {
+				if (widget instanceof TitleWidget) {
 					continue;
 				}
 				widget.active = !disabled;
-				if (widget instanceof EditBox editBox) {
-					editBox.setEditable(!disabled);
+				if (widget instanceof JadeWidget.TextField textField && textField.textField instanceof NotUglyEditBox editBox) {
+					editBox.setEnabled(!disabled);
 				}
 			}
 		}
 
-		public List<Component> getDescription() {
+		public List<ITextComponent> getDescription() {
 			return description;
 		}
 
-		public List<Component> getDescriptionOnShift() {
+		public List<ITextComponent> getDescriptionOnShift() {
 			return List.of();
 		}
 
@@ -648,65 +835,87 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 		}
 
 		public void addMessage(String message) {
-			messages.add(StringUtil.stripColor(message).toLowerCase(Locale.ENGLISH));
+			messages.add(TextFormatting.getTextWithoutFormattingCodes(message).toLowerCase(Locale.ENGLISH));
 		}
 
 		public void addMessageKey(String key) {
 			key = makeKey(key + "_extra_msg");
 			if (JadeUI.hasTranslation(key)) {
-				addMessage(I18n.get(key));
+				addMessage(I18n.format(key));
 			}
 		}
 
-		public Component title() {
+		public ITextComponent title() {
 			return title.getMessage();
 		}
 
-		public void setTitle(Component title) {
+		public void setTitle(ITextComponent title) {
 			this.title.setMessage(title);
 		}
 
-		@Override
-		public @Nullable ComponentPath focusPathAtIndex(FocusNavigationEvent navigationEvent, int currentIndex) {
-			if (children().isEmpty()) {
-				return null;
-			}
-			Set<AbstractWidget> widgets = Sets.newLinkedHashSet();
-			widgets.add(children().get(Math.min(currentIndex, children().size() - 1)));
-			if (mainWidget != null) {
-				widgets.add(mainWidget);
-			}
-			widgets.addAll(children());
-			for (AbstractWidget widget : widgets) {
-				if (!widget.isActive() || widget == title) {
-					continue;
-				}
-				ComponentPath componentPath = widget.nextFocusPath(navigationEvent);
-				if (componentPath != null) {
-					return ComponentPath.path(this, componentPath);
-				}
-			}
-			return null;
+		public int getContentX() {
+			return contentX;
+		}
+
+		public int getContentY() {
+			return contentY;
+		}
+
+		public int getContentWidth() {
+			return contentWidth;
+		}
+
+		public int getContentHeight() {
+			return contentHeight;
+		}
+
+		public int getContentRight() {
+			return contentX + contentWidth;
+		}
+
+		public int getContentBottom() {
+			return contentY + contentHeight;
+		}
+
+		public int getContentYMiddle() {
+			return contentY + contentHeight / 2;
+		}
+
+		public boolean isMouseOver(int mouseX, int mouseY) {
+			return mouseX >= contentX && mouseX < contentX + contentWidth
+					&& mouseY >= contentY && mouseY < contentY + contentHeight;
+		}
+
+		public boolean isHovered() {
+			return hovered;
+		}
+
+		public void updateHovered(int mouseX, int mouseY) {
+			hovered = isMouseOver(mouseX, mouseY);
+		}
+
+		public boolean isFocused() {
+			return false;
 		}
 	}
 
 	public static class Title extends Entry {
 
-		public Component narration;
+		public ITextComponent narration;
 
 		public Title(String key) {
 			this(makeTitle(key));
 			addMessageKey(key);
 			key = makeKey(key + "_desc");
 			if (JadeUI.hasTranslation(key)) {
-				description = List.of(Component.translatable(key));
-				addMessage(description.getFirst().getString());
+				description = List.of(new TextComponentTranslation(key));
+				addMessage(description.get(0).getFormattedText());
 			}
-			narration = Component.translatable("narration.jade.category", title());
+			narration = new TextComponentTranslation("narration.jade.category", title());
 		}
 
-		public Title(Component title) {
-			super(new StringWidget(title, Minecraft.getInstance().font));
+		public Title(ITextComponent title) {
+			super(title);
 			narration = title;
 		}
 
@@ -719,22 +928,5 @@ public class OptionsList extends ContainerObjectSelectionList<OptionsList.Entry>
 		public int getTextY() {
 			return 0;
 		}
-
-		@Override
-		public List<? extends NarratableEntry> narratables() {
-			return List.of(new NarratableEntry() {
-
-				@Override
-				public NarratableEntry.NarrationPriority narrationPriority() {
-					return NarratableEntry.NarrationPriority.HOVERED;
-				}
-
-				@Override
-				public void updateNarration(NarrationElementOutput narrationElementOutput) {
-					narrationElementOutput.add(NarratedElementType.TITLE, narration);
-				}
-			});
-		}
 	}
-
 }

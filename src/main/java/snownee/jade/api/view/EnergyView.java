@@ -4,10 +4,9 @@ import java.util.Objects;
 
 import org.jspecify.annotations.Nullable;
 
-import io.netty.buffer.ByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.text.ITextComponent;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.ui.IDisplayHelper;
 
 /**
@@ -30,7 +29,7 @@ public class EnergyView {
 	/**
 	 * Optional override text.
 	 */
-	public @Nullable Component overrideText;
+	public @Nullable ITextComponent overrideText;
 
 	/**
 	 * Creates an energy view from formatted strings.
@@ -66,12 +65,18 @@ public class EnergyView {
 	 * Serialized energy data.
 	 */
 	public record Data(long current, long capacity) {
-		public static final StreamCodec<ByteBuf, Data> STREAM_CODEC = StreamCodec.composite(
-				ByteBufCodecs.LONG,
-				Data::current,
-				ByteBufCodecs.LONG,
-				Data::capacity,
-				Data::new);
+		public static final DataCodec<Data> STREAM_CODEC = new DataCodec<>() {
+			@Override
+			public Data decode(PacketBuffer buf) {
+				return new Data(buf.readLong(), buf.readLong());
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, Data value) {
+				buf.writeLong(value.current);
+				buf.writeLong(value.capacity);
+			}
+		};
 	}
 
 }

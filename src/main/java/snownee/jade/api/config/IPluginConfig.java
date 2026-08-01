@@ -4,7 +4,7 @@ import java.util.Map;
 
 import org.jetbrains.annotations.ApiStatus.NonExtendable;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.IToggleableProvider;
 
 /**
@@ -21,7 +21,7 @@ public interface IPluginConfig {
 	 * @param key configuration key
 	 * @return {@code true} if the key has no secondary path segment
 	 */
-	static boolean isPrimaryKey(Identifier key) {
+	static boolean isPrimaryKey(ResourceLocation key) {
 		return !key.getPath().contains(".");
 	}
 
@@ -31,8 +31,10 @@ public interface IPluginConfig {
 	 * @param key configuration key
 	 * @return the primary key
 	 */
-	static Identifier getPrimaryKey(Identifier key) {
-		return key.withPath(key.getPath().substring(0, key.getPath().indexOf('.')));
+	static ResourceLocation getPrimaryKey(ResourceLocation key) {
+		String path = key.getPath();
+		int dot = path.indexOf('.');
+		return new ResourceLocation(key.getNamespace(), path.substring(0, dot));
 	}
 
 	/**
@@ -54,7 +56,7 @@ public interface IPluginConfig {
 	 * @param key configuration key
 	 * @return the stored value
 	 */
-	boolean get(Identifier key);
+	boolean get(ResourceLocation key);
 
 	/**
 	 * Returns an enum configuration value.
@@ -63,7 +65,7 @@ public interface IPluginConfig {
 	 * @param <T> enum type
 	 * @return the stored enum value
 	 */
-	<T extends Enum<T>> T getEnum(Identifier key);
+	<T extends Enum<T>> T getEnum(ResourceLocation key);
 
 	/**
 	 * Returns an integer configuration value.
@@ -71,7 +73,7 @@ public interface IPluginConfig {
 	 * @param key configuration key
 	 * @return the stored value
 	 */
-	int getInt(Identifier key);
+	int getInt(ResourceLocation key);
 
 	/**
 	 * Returns a floating-point configuration value.
@@ -79,7 +81,7 @@ public interface IPluginConfig {
 	 * @param key configuration key
 	 * @return the stored value
 	 */
-	float getFloat(Identifier key);
+	float getFloat(ResourceLocation key);
 
 	/**
 	 * Returns a string configuration value.
@@ -87,7 +89,7 @@ public interface IPluginConfig {
 	 * @param key configuration key
 	 * @return the stored value
 	 */
-	String getString(Identifier key);
+	String getString(ResourceLocation key);
 
 	/**
 	 * Updates a configuration entry.
@@ -96,12 +98,12 @@ public interface IPluginConfig {
 	 * @param value new value
 	 * @return {@code true} if the value was accepted
 	 */
-	boolean set(Identifier key, Object value);
+	boolean set(ResourceLocation key, Object value);
 
 	/**
 	 * Returns all stored configuration values.
 	 *
 	 * @return immutable or live values map
 	 */
-	Map<Identifier, Object> values();
+	Map<ResourceLocation, Object> values();
 }

@@ -2,7 +2,7 @@ package snownee.jade.api;
 
 import java.util.Objects;
 
-import net.minecraft.client.KeyMapping;
+import net.minecraft.client.settings.KeyBinding;
 import snownee.jade.JadeClient;
 import snownee.jade.util.ClientProxy;
 
@@ -24,7 +24,7 @@ public interface JadeKeys {
 	 *
 	 * @return the config key mapping
 	 */
-	static KeyMapping openConfig() {
+	static KeyBinding openConfig() {
 		return Objects.requireNonNull(JadeClient.openConfig);
 	}
 
@@ -33,7 +33,7 @@ public interface JadeKeys {
 	 *
 	 * @return the overlay key mapping
 	 */
-	static KeyMapping showOverlay() {
+	static KeyBinding showOverlay() {
 		return Objects.requireNonNull(JadeClient.showOverlay);
 	}
 
@@ -42,7 +42,7 @@ public interface JadeKeys {
 	 *
 	 * @return the liquid key mapping
 	 */
-	static KeyMapping toggleLiquid() {
+	static KeyBinding toggleLiquid() {
 		return Objects.requireNonNull(JadeClient.toggleLiquid);
 	}
 
@@ -51,7 +51,7 @@ public interface JadeKeys {
 	 *
 	 * @return the details key mapping
 	 */
-	static KeyMapping showDetails() {
+	static KeyBinding showDetails() {
 		return Objects.requireNonNull(JadeClient.showDetails);
 	}
 
@@ -60,7 +60,7 @@ public interface JadeKeys {
 	 *
 	 * @return the narration key mapping
 	 */
-	static KeyMapping narrate() {
+	static KeyBinding narrate() {
 		return Objects.requireNonNull(JadeClient.narrate);
 	}
 
@@ -69,7 +69,7 @@ public interface JadeKeys {
 	 *
 	 * @return the recipes key mapping
 	 */
-	static KeyMapping showRecipes() {
+	static KeyBinding showRecipes() {
 		return Objects.requireNonNull(JadeClient.showRecipes);
 	}
 
@@ -78,7 +78,7 @@ public interface JadeKeys {
 	 *
 	 * @return the uses key mapping
 	 */
-	static KeyMapping showUses() {
+	static KeyBinding showUses() {
 		return Objects.requireNonNull(JadeClient.showUses);
 	}
 
@@ -88,7 +88,7 @@ public interface JadeKeys {
 	 * @param index profile slot index
 	 * @return the profile key mapping
 	 */
-	static KeyMapping useProfile(int index) {
+	static KeyBinding useProfile(int index) {
 		return Objects.requireNonNull(JadeClient.profiles[index]);
 	}
 }

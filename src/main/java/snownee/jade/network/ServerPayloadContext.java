@@ -1,18 +1,28 @@
 package snownee.jade.network;
 
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import snownee.jade.util.CommonProxy;
 
+/**
+ * Server-side packet handling context.
+ *
+ * <p>1.12.2: replaces the modern {@code ServerPayloadContext} backed by
+ * {@code ClientboundCustomPayloadPacket}; dispatch goes through
+ * {@link JadeNetwork} instead.
+ */
 public interface ServerPayloadContext {
+	static ServerPayloadContext of(EntityPlayerMP player) {
+		return () -> player;
+	}
+
 	default void execute(Runnable runnable) {
 		CommonProxy.runWithContext(this, runnable);
 	}
 
-	default void sendPacket(CustomPacketPayload payload) {
-		player().connection.send(new ClientboundCustomPayloadPacket(payload));
+	default void sendPacket(IMessage message) {
+		JadeNetwork.sendTo(message, player());
 	}
 
-	ServerPlayer player();
+	EntityPlayerMP player();
 }

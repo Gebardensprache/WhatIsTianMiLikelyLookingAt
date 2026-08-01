@@ -1,21 +1,26 @@
 package snownee.jade.gui;
 
+import java.util.Objects;
+
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.AbstractStringWidget;
-import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.StringWidget;
-import net.minecraft.client.gui.screens.ConfirmScreen;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.resources.language.I18n;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.GuiYesNo;
+import net.minecraft.client.gui.GuiYesNoCallback;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.client.settings.KeyBinding;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.TextFormatting;
 import snownee.jade.Jade;
 import snownee.jade.JadeClient;
 import snownee.jade.api.JadeKeys;
 import snownee.jade.api.ui.JadeUI;
+import snownee.jade.gui.config.JadeWidget;
 import snownee.jade.gui.config.NotUglyEditBox;
 import snownee.jade.gui.config.OptionsList;
 import snownee.jade.gui.config.value.OptionValue;
@@ -26,20 +31,20 @@ public class ProfileConfigScreen extends BaseOptionsScreen {
 
 	private @Nullable OptionValue<Boolean> enabledEntry;
 
-	public ProfileConfigScreen(Screen parent) {
-		super(parent, Component.translatable("gui.jade.profile_settings"));
+	public ProfileConfigScreen(GuiScreen parent) {
+		super(parent, new TextComponentTranslation("gui.jade.profile_settings"));
 		saver = () -> {
 			for (OptionsList.Entry entry : options().children()) {
 				if (entry instanceof ProfileEntry profileEntry) {
 					profileEntry.save();
 				}
 			}
-			KeyMapping.resetMapping();
-			Minecraft.getInstance().options.save();
+			KeyBinding.resetKeyBindingArrayAndHash();
+			mc.gameSettings.saveOptions();
 		};
 		boolean enabled = Jade.rootConfig().isEnableProfiles();
 		int index = Jade.rootConfig().profileIndex;
-		Runnable runnable = JadeClient.recoverKeysAction($ -> JadeKeys.openConfig().getCategory().equals($.getCategory()));
+		Runnable runnable = JadeClient.recoverKeysAction($ -> JadeKeys.openConfig().getKeyCategory().equals($.getKeyCategory()));
 		canceller = () -> {
 			if (enabled) {
 				Jade.useProfile(index);
@@ -64,16 +69,16 @@ public class ProfileConfigScreen extends BaseOptionsScreen {
 		}
 
 		options.title("key_binds");
-		for (KeyMapping keyMapping : JadeClient.profiles) {
-			options.keybind(keyMapping);
+		for (KeyBinding keyBinding : JadeClient.profiles) {
+			options.keybind(keyBinding);
 		}
 
 		return options;
 	}
 
 	@Override
-	protected void init() {
-		super.init();
+	public void initGui() {
+		super.initGui();
 		refresh();
 	}
 
@@ -90,23 +95,20 @@ public class ProfileConfigScreen extends BaseOptionsScreen {
 	}
 
 	public static class ProfileEntry extends OptionsList.Entry {
-		public static final Component USE = Component.translatable("gui.jade.profile.use");
-		public static final Component SAVE = Component.translatable("selectWorld.edit.save");
+		public static final ITextComponent USE = new TextComponentTranslation("gui.jade.profile.use");
+		public static final ITextComponent SAVE = new TextComponentTranslation("selectWorld.edit.save");
 		private final int index;
 		private final NotUglyEditBox editBox;
 		private final @Nullable String originalName;
 
 		public ProfileEntry(int index) {
-			super(new StringWidget(Component.translatable("config.jade.profile." + index), Minecraft.getInstance().font));
+			super(new TextComponentTranslation("config.jade.profile." + index));
 			this.index = index;
 
-			editBox = new NotUglyEditBox(font, 0, 0, 150, 20, title());
+			editBox = new NotUglyEditBox(font.raw(), 0, 0, 150, 20, title());
 			editBox.fixedTextX = 4;
 			editBox.fixedTextY = 7;
 			editBox.fixedInnerWidth = editBox.getWidth() - 4 - 12;
-
-			StringWidget titleWidget = (StringWidget) title;
-			titleWidget.setMaxWidth(editBox.fixedInnerWidth, StringWidget.TextOverflow.CLAMPED);
 
 			editBox.backgroundMode = NotUglyEditBox.BackgroundMode.HOVERING;
 			editBox.setMaxLength(WailaConfig.MAX_NAME_LENGTH);
@@ -114,44 +116,57 @@ public class ProfileConfigScreen extends BaseOptionsScreen {
 			editBox.setResponder(_ -> refresh());
 			String name = Jade.configs().get(index).get().getName();
 			if (name.startsWith("@")) {
-				editBox.setValue(I18n.get(name.substring(1)));
+				editBox.setValue(I18n.format(name.substring(1)));
 				originalName = editBox.getValue();
 			} else {
 				editBox.setValue(name);
 				originalName = null;
 			}
-			addWidget(new OptionsList.EntryWidget(editBox, 6, -editBox.getHeight() / 2, false));
+			addWidget(new OptionsList.EntryWidget(new JadeWidget.TextField(editBox), 6, -editBox.height / 2, false));
 
-			addWidget(
-					Button.builder(
-							USE, _ -> {
-								Jade.useProfile(index);
-								if (Minecraft.getInstance().gui.screen() instanceof ProfileConfigScreen screen) {
-									screen.refresh();
-								}
-							}).size(48, 20).build(), 0);
+			addWidget(new JadeWidget.Button(new GuiButton(0, 0, 0, 48, 20, USE.getFormattedText()) {
+				@Override
+				public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+					if (super.mousePressed(mc, mouseX, mouseY)) {
+						Jade.useProfile(index);
+						if (mc.currentScreen instanceof ProfileConfigScreen screen) {
+							screen.refresh();
+						}
+						return true;
+					}
+					return false;
+				}
+			}), 0);
 
-			addWidget(
-					Button.builder(
-							SAVE, _ -> {
-								if (JadeUI.hasControlDown()) {
-									Jade.saveProfile(index);
-									return;
-								}
-								Minecraft mc = Minecraft.getInstance();
-								Screen screen = mc.gui.screen();
-								mc.gui.setScreen(new ConfirmScreen(
-										bl -> {
-											if (bl) {
-												Jade.saveProfile(index);
-											}
-											Minecraft.getInstance().gui.setScreen(screen);
-										},
-										Component.translatable("gui.jade.save_profile.title"),
-										Component.translatable("gui.jade.save_profile.message", normalTitle()),
-										Component.translatable("gui.continue"),
-										Component.translatable("gui.cancel")));
-							}).size(48, 20).build(), 100 - 48);
+			addWidget(new JadeWidget.Button(new GuiButton(0, 0, 0, 48, 20, SAVE.getFormattedText()) {
+				@Override
+				public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+					if (super.mousePressed(mc, mouseX, mouseY)) {
+						if (JadeUI.hasControlDown()) {
+							Jade.saveProfile(index);
+							return true;
+						}
+						GuiScreen screen = mc.currentScreen;
+						mc.displayGuiScreen(new GuiYesNo(
+								new GuiYesNoCallback() {
+									@Override
+									public void confirmClicked(boolean bl, int id) {
+										if (bl) {
+											Jade.saveProfile(index);
+										}
+										mc.displayGuiScreen(screen);
+									}
+								},
+								new TextComponentTranslation("gui.jade.save_profile.title").getFormattedText(),
+								new TextComponentTranslation("gui.jade.save_profile.message", normalTitle()).getFormattedText(),
+								I18n.format("gui.continue"),
+								I18n.format("gui.cancel"),
+								0));
+						return true;
+					}
+					return false;
+				}
+			}), 100 - 48);
 		}
 
 		public void refresh() {
@@ -159,27 +174,25 @@ public class ProfileConfigScreen extends BaseOptionsScreen {
 			boolean enabled = root.isEnableProfiles();
 			boolean current = index == root.profileIndex;
 			if (enabled && current) {
-				setTitle(normalTitle().copy().withColor(0xFFFFFF55).append(Component.translatable("gui.jade.profile.active")));
+				setTitle(normalTitle().createCopy().setStyle(new Style().setColor(TextFormatting.YELLOW))
+						.appendSibling(new TextComponentTranslation("gui.jade.profile.active")));
 			} else {
 				setTitle(normalTitle());
 			}
-			for (AbstractWidget widget : children()) {
-				if (widget instanceof AbstractStringWidget) {
-					continue;
-				}
-				if (widget == editBox) {
+			for (JadeWidget widget : children()) {
+				if (widget instanceof JadeWidget.TextField textField && textField.textField instanceof NotUglyEditBox editBox) {
 					editBox.setTextColor(enabled && current ? 0xFFFFFF55 : 0xFFE0E0E0);
-					editBox.setEditable(enabled);
+					editBox.setEnabled(enabled);
 				} else if (enabled) {
 					widget.active = !current;
 				}
 			}
 		}
 
-		private Component normalTitle() {
-			return editBox.getValue().isBlank() ?
-					Component.translatable("config.jade.profile." + index) :
-					Component.literal(editBox.getValue());
+		private ITextComponent normalTitle() {
+			return editBox.getValue().isEmpty() ?
+					new TextComponentTranslation("config.jade.profile." + index) :
+					new TextComponentString(editBox.getValue());
 		}
 
 		public void save() {

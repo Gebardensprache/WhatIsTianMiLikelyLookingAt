@@ -2,7 +2,6 @@ package snownee.jade.impl.ui;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import snownee.jade.api.ui.Rect2f;
 import snownee.jade.api.ui.ResizeableElement;
 
@@ -27,7 +26,7 @@ public abstract class ProgressOverlayElement extends ResizeableElement {
 		return floatingRect;
 	}
 
-	public boolean canUseFloatingRect(GuiGraphicsExtractor graphics) {
+	public boolean canUseFloatingRect() {
 		return true;
 	}
 

@@ -4,11 +4,10 @@ import java.util.Objects;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.Mth;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentTranslation;
 import snownee.jade.api.JadeIds;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.config.IWailaConfig;
@@ -17,11 +16,26 @@ import snownee.jade.api.ui.Element;
 import snownee.jade.api.ui.IDisplayHelper;
 import snownee.jade.overlay.DisplayHelper;
 
+/**
+ * 1.12.2: the upstream {@code ARMOR}/{@code HALF_ARMOR}/{@code EMPTY_ARMOR}
+ * constants reference {@code minecraft:hud/armor_*} — modern Minecraft ships those
+ * as separate GUI-sprites under {@code textures/gui/sprites/hud/armor_*.png}, but
+ * 1.12.2 has no such files (its atlas {@code textures/gui/icons.png} is a single
+ * sheet of fixed UV regions; see {@code GuiIngame.renderPlayerStats}). Those
+ * constants would resolve through {@code DisplayHelper.resolveSprite} to a
+ * nonexistent texture and render as the missing-texture checkerboard. Mirror
+ * {@link HealthElement}: bind {@code icons.png} and draw the vanilla armor regions
+ * directly — full {@code (34, 9)}, half {@code (25, 9)}, empty {@code (16, 9)},
+ * each 9x9. The render logic itself is unchanged from upstream.
+ */
 public class ArmorElement extends Element {
 
-	public static final Identifier ARMOR = Identifier.withDefaultNamespace("hud/armor_full");
-	public static final Identifier HALF_ARMOR = Identifier.withDefaultNamespace("hud/armor_half");
-	public static final Identifier EMPTY_ARMOR = Identifier.withDefaultNamespace("hud/armor_empty");
+	private static final ResourceLocation ICONS = new ResourceLocation("textures/gui/icons.png");
+	private static final int SHEET_SIZE = 256;
+	private static final int EMPTY_U = 16;
+	private static final int HALF_U = 25;
+	private static final int FULL_U = 34;
+	private static final int V = 9;
 
 	private final float armor;
 	private @Nullable String text;
@@ -34,15 +48,15 @@ public class ArmorElement extends Element {
 		IPluginConfig config = IWailaConfig.get().plugin();
 		if (armor > config.getInt(JadeIds.MC_ENTITY_ARMOR_MAX_FOR_RENDER)) {
 			if (!config.get(JadeIds.MC_ENTITY_HEALTH_SHOW_FRACTIONS)) {
-				armor = Mth.ceil(armor);
+				armor = MathHelper.ceil(armor);
 			}
 			text = DisplayHelper.dfCommas.format(armor);
 		} else {
 			armor *= 0.5F;
 			int maxHeartsPerLine = config.getInt(JadeIds.MC_ENTITY_HEALTH_ICONS_PER_LINE);
-			iconCount = Mth.ceil(armor);
+			iconCount = MathHelper.ceil(armor);
 			iconsPerLine = Math.min(maxHeartsPerLine, iconCount);
-			lineCount = Mth.ceil(armor / maxHeartsPerLine);
+			lineCount = MathHelper.ceil(armor / maxHeartsPerLine);
 		}
 		if (showText()) {
 			width = DisplayHelper.font().width(text) + 10;
@@ -54,21 +68,21 @@ public class ArmorElement extends Element {
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+	public void extractRenderState(int mouseX, int mouseY, float partialTicks) {
 		IDisplayHelper helper = IDisplayHelper.get();
 		int x = getX();
 		int y = getY();
 		int xOffset = (iconCount - 1) % iconsPerLine * 8;
 		int yOffset = lineCount * 4 - 4;
 		for (int i = iconCount; i > 0; --i) {
-			helper.blitSprite(graphics, RenderPipelines.GUI_TEXTURED, EMPTY_ARMOR, x + xOffset, y + yOffset, 9, 9);
+			helper.blitSprite(ICONS, SHEET_SIZE, SHEET_SIZE, EMPTY_U, V, x + xOffset, y + yOffset, 9, 9);
 
-			if (i <= Mth.floor(armor)) {
-				helper.blitSprite(graphics, RenderPipelines.GUI_TEXTURED, ARMOR, x + xOffset, y + yOffset, 9, 9);
+			if (i <= MathHelper.floor(armor)) {
+				helper.blitSprite(ICONS, SHEET_SIZE, SHEET_SIZE, FULL_U, V, x + xOffset, y + yOffset, 9, 9);
 			}
 
 			if ((i > armor) && (i < armor + 1)) {
-				helper.blitSprite(graphics, RenderPipelines.GUI_TEXTURED, HALF_ARMOR, x + xOffset, y + yOffset, 9, 9);
+				helper.blitSprite(ICONS, SHEET_SIZE, SHEET_SIZE, HALF_U, V, x + xOffset, y + yOffset, 9, 9);
 			}
 
 			xOffset -= 8;
@@ -79,13 +93,13 @@ public class ArmorElement extends Element {
 		}
 
 		if (showText()) {
-			helper.drawText(graphics, Objects.requireNonNull(text), x + 10, y + 1, IThemeHelper.get().getNormalColor());
+			helper.drawText(Objects.requireNonNull(text), x + 10, y + 1, IThemeHelper.get().getNormalColor());
 		}
 	}
 
 	@Override
-	public Component getNarration() {
-		return Component.translatable("narration.jade.armor", Mth.ceil(armor));
+	public ITextComponent getNarration() {
+		return new TextComponentTranslation("narration.jade.armor", MathHelper.ceil(armor));
 	}
 
 	public boolean showText() {

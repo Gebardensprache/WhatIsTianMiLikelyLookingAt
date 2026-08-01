@@ -1,5 +1,6 @@
 package snownee.jade.api.config;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -9,7 +10,7 @@ public class IgnoreList {
 	/**
 	 * Ignored entry identifiers or names.
 	 */
-	public List<String> values = List.of();
+	public List<String> values = Arrays.asList();
 	/**
 	 * Serialized data version.
 	 */

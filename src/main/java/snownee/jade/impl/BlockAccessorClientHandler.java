@@ -5,11 +5,13 @@ import java.util.function.Function;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.LiquidBlock;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.init.Items;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockLiquid;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.block.material.Material;
 import snownee.jade.api.AccessorClientHandler;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IJadeProvider;
@@ -56,9 +58,9 @@ public class BlockAccessorClientHandler implements AccessorClientHandler<BlockAc
 
 	@Override
 	public @Nullable Element getIcon(BlockAccessor accessor) {
-		BlockState blockState = accessor.getBlockState();
+		IBlockState blockState = accessor.getBlockState();
 		Block block = blockState.getBlock();
-		if (blockState.isAir()) {
+		if (blockState.getMaterial() == Material.AIR) {
 			return null;
 		}
 		Element icon = null;
@@ -68,11 +70,11 @@ public class BlockAccessorClientHandler implements AccessorClientHandler<BlockAc
 			icon = JadeUI.item(pick);
 		}
 
-		if (JadeUI.isEmptyElement(icon) && block.asItem() != Items.AIR) {
+		if (JadeUI.isEmptyElement(icon) && Item.getItemFromBlock(block) != Items.AIR) {
 			icon = JadeUI.item(new ItemStack(block));
 		}
 
-		if (JadeUI.isEmptyElement(icon) && block instanceof LiquidBlock) {
+		if (JadeUI.isEmptyElement(icon) && block instanceof BlockLiquid) {
 			icon = ClientProxy.elementFromLiquid(blockState);
 		}
 

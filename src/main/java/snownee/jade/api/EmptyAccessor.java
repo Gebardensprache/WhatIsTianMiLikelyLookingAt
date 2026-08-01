@@ -3,15 +3,15 @@ package snownee.jade.api;
 import org.jetbrains.annotations.ApiStatus.NonExtendable;
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.world.World;
+import net.minecraft.util.math.RayTraceResult;
 
 /**
  * Accessor used when Jade needs context without a specific target.
  */
-public interface EmptyAccessor extends Accessor<BlockHitResult> {
+public interface EmptyAccessor extends Accessor<RayTraceResult> {
 
 	@Override
 	default Class<? extends Accessor<?>> getAccessorType() {
@@ -20,17 +20,17 @@ public interface EmptyAccessor extends Accessor<BlockHitResult> {
 
 	@NonExtendable
 	interface Builder {
-		Builder level(Level level);
+		Builder level(World level);
 
-		Builder player(Player player);
+		Builder player(EntityPlayer player);
 
-		Builder serverData(@Nullable CompoundTag serverData);
+		Builder serverData(@Nullable NBTTagCompound serverData);
 
 		Builder serverConnected(boolean connected);
 
 		Builder showDetails(boolean showDetails);
 
-		Builder hit(BlockHitResult hit);
+		Builder hit(RayTraceResult hit);
 
 		/**
 		 * Copies values from another empty accessor.

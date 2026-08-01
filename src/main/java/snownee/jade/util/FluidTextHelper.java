@@ -28,8 +28,9 @@ import java.util.function.Supplier;
 
 import com.google.common.math.LongMath;
 
-import net.minecraft.client.resources.language.I18n;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
 import snownee.jade.JadeClient;
 import snownee.jade.api.ui.JadeUI;
 import snownee.jade.api.ui.NarratableComponent;
@@ -86,7 +87,7 @@ public class FluidTextHelper {
 
 		String key = "narration.jade.%s/%s".formatted(numerator, denominator);
 		if (JadeUI.hasTranslation(key)) {
-			return I18n.get(key);
+			return I18n.format(key);
 		}
 		return JadeClient.formatString("narration.jade.N/N", numerator, denominator);
 	}
@@ -143,7 +144,7 @@ public class FluidTextHelper {
 					getFractionNarration(numerator, denominator, true));
 		}
 		return new NarratableComponent(
-				Component.literal(string), () -> {
+				new TextComponentString(string), () -> {
 			double number = integer;
 			if (denominator != 0) {
 				number += (double) numerator / (double) denominator;

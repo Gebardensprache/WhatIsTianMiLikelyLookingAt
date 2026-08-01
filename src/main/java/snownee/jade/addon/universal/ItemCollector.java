@@ -1,10 +1,12 @@
 package snownee.jade.addon.universal;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import org.jspecify.annotations.Nullable;
 
@@ -12,37 +14,25 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
 import it.unimi.dsi.fastutil.objects.Object2IntLinkedOpenHashMap;
-import net.minecraft.core.component.DataComponentPatch;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.item.component.TooltipDisplay;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.view.ViewGroup;
 
 public class ItemCollector<T> {
 	public static final int MAX_SIZE = 54;
 	public static final ItemCollector<?> EMPTY = new ItemCollector<>(null);
-	private static final CompoundTag IGNORED_TAG = new CompoundTag();
-
-	static {
-		IGNORED_TAG.putBoolean("__JadeClear", true);
-	}
+	private static final String CLEAR_TAG = "__JadeClear";
 
 	private static final Predicate<ItemStack> SHOWN = stack -> {
 		if (stack.isEmpty()) {
 			return false;
 		}
-		if (stack.getOrDefault(DataComponents.TOOLTIP_DISPLAY, TooltipDisplay.DEFAULT).hideTooltip()) {
-			return false;
-		}
-		if (stack.hasNonDefault(DataComponents.CUSTOM_MODEL_DATA) || stack.hasNonDefault(DataComponents.ITEM_MODEL)) {
-			CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
-			return !customData.matchedBy(IGNORED_TAG);
-		}
-		return true;
+		// 1.12.2: TooltipDisplay and custom model data components do not exist. Preserve the
+		// explicit true Jade marker to allow integrations to suppress ephemeral stacks.
+		NBTTagCompound tag = stack.getTagCompound();
+		return tag == null || !tag.getBoolean(CLEAR_TAG);
 	};
 	private final Items items = new Items();
 	private final @Nullable ItemIterator<T> iterator;
@@ -64,16 +54,16 @@ public class ItemCollector<T> {
 		if (container == null) {
 			return null;
 		}
-		boolean sorted = accessor.getServerData().getBooleanOr("SortItems", false);
+		boolean sorted = accessor.getServerData().getBoolean("SortItems");
 		long currentVersion = iterator.getVersion(container);
 		long gameTime = System.currentTimeMillis();
 		List<ViewGroup<ItemStack>> result = sorted ? sortedMergedResult : mergedResult;
 		if (result != null && iterator.isFinished()) {
 			if (version == currentVersion) {
-				return result; // content not changed
+				return result;
 			}
 			if (lastTimeFinished + 250 > gameTime) {
-				return result; // avoid update too frequently
+				return result;
 			}
 			iterator.reset();
 		}
@@ -87,20 +77,20 @@ public class ItemCollector<T> {
 		});
 		iterator.afterPopulate(count.get());
 		if (result != null && !iterator.isFinished()) {
-			updateCollectingProgress(result.getFirst());
+			updateCollectingProgress(result.get(0));
 			return result;
 		}
 		List<ItemStack> partialResult = items.partialResult(sorted);
-		List<ViewGroup<ItemStack>> groups = List.of(updateCollectingProgress(new ViewGroup<>(partialResult)));
+		List<ViewGroup<ItemStack>> groups = Collections.singletonList(updateCollectingProgress(new ViewGroup<>(partialResult)));
 		if (iterator.isFinished()) {
 			if (sorted) {
-				mergedResult = List.of(updateCollectingProgress(new ViewGroup<>(items.partialResult(false))));
+				mergedResult = Collections.singletonList(updateCollectingProgress(new ViewGroup<>(items.partialResult(false))));
 				sortedMergedResult = groups;
 			} else {
 				mergedResult = groups;
-				sortedMergedResult = List.of(updateCollectingProgress(new ViewGroup<>(items.partialResult(true))));
+				sortedMergedResult = Collections.singletonList(updateCollectingProgress(new ViewGroup<>(items.partialResult(true))));
 			}
-			lastTimeIsEmpty = groups.getFirst().views.isEmpty();
+			lastTimeIsEmpty = groups.get(0).views.isEmpty();
 			version = currentVersion;
 			lastTimeFinished = gameTime;
 			items.clear();
@@ -113,23 +103,26 @@ public class ItemCollector<T> {
 			return group;
 		}
 		float progress = Objects.requireNonNull(iterator).getCollectingProgress();
-		CompoundTag data = group.getExtraData();
+		NBTTagCompound data = group.getExtraData();
 		if (Float.isNaN(progress) || progress >= 1) {
-			data.remove("Collecting");
+			data.removeTag("Collecting");
 		} else {
-			data.putFloat("Collecting", progress);
+			data.setFloat("Collecting", progress);
 		}
 		return group;
 	}
 
-	public record ItemDefinition(Item item, DataComponentPatch components) {
+	public record ItemDefinition(Item item, int damage, @Nullable NBTTagCompound tag) {
 		ItemDefinition(ItemStack stack) {
-			this(stack.getItem(), stack.getComponentsPatch());
+			// 1.12.2: item components are represented by the full copied NBT tag, and item
+			// meta/damage lives in the stack's metadata field (GT meta items store their
+			// variant id there) — both must be preserved or distinct variants collapse.
+			this(stack.getItem(), stack.getItemDamage(), stack.hasTagCompound() ? stack.getTagCompound().copy() : null);
 		}
 
 		public ItemStack toStack(int count) {
-			ItemStack itemStack = new ItemStack(item, count);
-			itemStack.applyComponents(components);
+			ItemStack itemStack = new ItemStack(item, count, damage);
+			itemStack.setTagCompound(tag == null ? null : tag.copy());
 			return itemStack;
 		}
 	}
@@ -156,17 +149,12 @@ public class ItemCollector<T> {
 					sortedSet.addAll(sorted);
 				}
 				if (!sorted.isEmpty()) {
-					smallestCount = items.getInt(sorted.getLast());
+					smallestCount = items.getInt(sorted.get(sorted.size() - 1));
 				}
-				return sorted.stream()
-						.map(def -> def.toStack(items.getInt(def)))
-						.toList();
-			} else {
-				return items.object2IntEntrySet().stream()
-						.limit(MAX_SIZE)
-						.map(entry -> entry.getKey().toStack(entry.getIntValue()))
-						.toList();
+				return sorted.stream().map(def -> def.toStack(items.getInt(def))).collect(Collectors.toList());
 			}
+			return items.object2IntEntrySet().stream().limit(MAX_SIZE)
+					.map(entry -> entry.getKey().toStack(entry.getIntValue())).collect(Collectors.toList());
 		}
 
 		public void addTo(ItemDefinition def, int count) {

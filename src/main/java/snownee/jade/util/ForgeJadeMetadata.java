@@ -2,30 +2,33 @@ package snownee.jade.util;
 
 import java.util.Map;
 
-import com.electronwill.nightconfig.core.AbstractConfig;
 import com.google.common.collect.ImmutableList;
+import com.google.gson.reflect.TypeToken;
 
-import net.neoforged.fml.ModList;
-import net.neoforged.neoforgespi.language.IModInfo;
+import net.minecraftforge.fml.common.Loader;
+import net.minecraftforge.fml.common.ModContainer;
 import snownee.jade.Jade;
 
 public class ForgeJadeMetadata extends JadeMetadata {
 
 	public ForgeJadeMetadata() {
 		ImmutableList.Builder<String> disableModNameBuilder = ImmutableList.builder();
-		for (IModInfo container : ModList.get().getMods()) {
+		for (ModContainer container : Loader.instance().getActiveModList()) {
 			String modId = container.getModId();
 			try {
-				Object raw = container.getModProperties().get(Jade.ID);
+				// 1.12.2: ModMetadata has no modproperties field (1.13+ only). Custom mod properties are exposed
+				// as a flat Map<String, String> via @Mod(customProperties = @Mod.CustomProperty(k, v)); the jade
+				// value is expected to be a JSON object string, parsed back into a map here.
+				Object raw = JsonConfig.GSON.fromJson((String) container.getCustomModProperties().get(Jade.ID), new TypeToken<Map<String, Object>>() {}.getType());
 				if (raw == null) {
 					continue;
 				}
 				Map<String, Object> obj;
-				if (raw instanceof AbstractConfig config) {
-					obj = config.valueMap();
-				} else {
+				if (raw instanceof Map) {
 					//noinspection unchecked
 					obj = (Map<String, Object>) raw;
+				} else {
+					continue;
 				}
 				if (obj.isEmpty()) {
 					continue;

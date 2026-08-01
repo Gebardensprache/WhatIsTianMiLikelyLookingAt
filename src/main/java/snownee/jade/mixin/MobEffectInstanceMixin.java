@@ -2,18 +2,17 @@ package snownee.jade.mixin;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
+
+import net.minecraft.potion.PotionEffect;
+
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.entity.LivingEntity;
 import snownee.jade.util.JadeMobEffectInstance;
 
-@Mixin(MobEffectInstance.class)
+@Mixin(PotionEffect.class)
 public abstract class MobEffectInstanceMixin implements JadeMobEffectInstance {
 	@Unique
 	private long jade$updateTime;
@@ -40,20 +39,13 @@ public abstract class MobEffectInstanceMixin implements JadeMobEffectInstance {
 		this.jade$addTime = time;
 	}
 
-	@Inject(method = "onEffectAdded", at = @At("HEAD"))
-	private void jade$onEffectAdded(LivingEntity livingEntity, CallbackInfo ci) {
-		long time = System.currentTimeMillis();
-		jade$setAddTime(time);
-		jade$setUpdateTime(time);
-	}
-
-	@WrapMethod(method = "update")
-	private boolean jade$update(MobEffectInstance takeOver, Operation<Boolean> original) {
-		boolean bl = original.call(takeOver);
-		long thatTime = ((JadeMobEffectInstance) takeOver).jade$updateTime();
-		if (bl && thatTime > jade$updateTime) {
+	// 1.12.2: PotionEffect.combine() is void (modern MobEffectInstance.update() returns boolean).
+	// Instead of reading a boolean return, we unconditionally adopt the newer timestamp.
+	@Inject(method = "combine", at = @At("TAIL"))
+	private void jade$combine(PotionEffect other, CallbackInfo ci) {
+		long thatTime = ((JadeMobEffectInstance) other).jade$updateTime();
+		if (thatTime > jade$updateTime) {
 			jade$updateTime = thatTime;
 		}
-		return bl;
 	}
 }

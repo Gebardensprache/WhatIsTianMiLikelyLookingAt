@@ -2,7 +2,7 @@ package snownee.jade.api;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NBTTagCompound;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.ui.Element;
 
@@ -21,7 +21,7 @@ public interface IComponentProvider<T extends Accessor<?>> extends IToggleablePr
 	 * {@link IWailaClientRegistration#registerEntityIcon(IComponentProvider, Class)}.
 	 *
 	 * <p>If the icon depends on server-only information, synchronize it through
-	 * {@link IServerDataProvider#appendServerData(CompoundTag, Accessor)} first.
+	 * {@link IServerDataProvider#appendServerData(NBTTagCompound, Accessor)} first.
 	 *
 	 * @param accessor accessor describing the current target and context
 	 * @param config current plugin configuration

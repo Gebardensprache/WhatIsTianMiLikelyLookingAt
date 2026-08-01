@@ -22,8 +22,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
-import net.minecraft.core.IdMapper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.Jade;
 import snownee.jade.api.IJadeProvider;
 import snownee.jade.impl.PriorityStore;
@@ -36,7 +35,7 @@ public class HierarchyLookup<T extends IJadeProvider> implements IHierarchyLooku
 	protected boolean idMapped;
 	protected @Nullable IdMapper<T> idMapper;
 	private ListMultimap<Class<?>, T> objects = ArrayListMultimap.create();
-	protected @Nullable Map<Identifier, T> byKey;
+	protected @Nullable Map<ResourceLocation, T> byKey;
 
 	public HierarchyLookup(Class<?> baseClass) {
 		this(baseClass, false);
@@ -106,7 +105,7 @@ public class HierarchyLookup<T extends IJadeProvider> implements IHierarchyLooku
 	}
 
 	@Override
-	public @Nullable T byKey(Identifier key) {
+	public @Nullable T byKey(ResourceLocation key) {
 		return Objects.requireNonNull(byKey).get(key);
 	}
 
@@ -133,12 +132,12 @@ public class HierarchyLookup<T extends IJadeProvider> implements IHierarchyLooku
 	}
 
 	@Override
-	public void loadComplete(PriorityStore<Identifier, IJadeProvider> priorityStore) {
+	public void loadComplete(PriorityStore<ResourceLocation, IJadeProvider> priorityStore) {
 		objects.asMap().forEach((clazz, list) -> {
 			if (list.size() < 2) {
 				return;
 			}
-			Set<Identifier> set = Sets.newHashSetWithExpectedSize(list.size());
+			Set<ResourceLocation> set = Sets.newHashSetWithExpectedSize(list.size());
 			for (T provider : list) {
 				if (set.contains(provider.getUid())) {
 					throw new IllegalStateException("Duplicate UID: %s for %s".formatted(

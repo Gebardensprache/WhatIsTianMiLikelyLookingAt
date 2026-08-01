@@ -6,11 +6,8 @@ import java.util.function.UnaryOperator;
 import org.jetbrains.annotations.ApiStatus.NonExtendable;
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.gui.layouts.LayoutElement;
-import net.minecraft.client.gui.layouts.LayoutSettings;
-import net.minecraft.client.gui.narration.NarrationSupplier;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.ui.Element;
 import snownee.jade.api.ui.JadeUI;
 import snownee.jade.api.ui.ScreenDirection;
@@ -21,7 +18,7 @@ import snownee.jade.api.ui.ScreenDirection;
  * Addons can append text, icons, and custom layout elements, then tag and replace sections later in the pipeline.
  */
 @NonExtendable
-public interface ITooltip extends NarrationSupplier {
+public interface ITooltip {
 
 	/**
 	 * Removes every element from this tooltip.
@@ -44,7 +41,7 @@ public interface ITooltip extends NarrationSupplier {
 	 *
 	 * @param component the text to add
 	 */
-	default void add(Component component) {
+	default void add(ITextComponent component) {
 		add(component, null);
 	}
 
@@ -54,19 +51,19 @@ public interface ITooltip extends NarrationSupplier {
 	 * @param component the text to add
 	 * @param tag optional identifier used for later replacement or removal
 	 */
-	default void add(Component component, @Nullable Identifier tag) {
+	default void add(ITextComponent component, @Nullable ResourceLocation tag) {
 		add(size(), component, tag);
 	}
 
-	default void add(int index, Component component) {
+	default void add(int index, ITextComponent component) {
 		add(index, component, null);
 	}
 
-	default void add(int index, Component component, @Nullable Identifier tag) {
+	default void add(int index, ITextComponent component, @Nullable ResourceLocation tag) {
 		add(index, JadeUI.text(component).tag(tag));
 	}
 
-	default void addAll(List<Component> components) {
+	default void addAll(List<ITextComponent> components) {
 		components.forEach(this::add);
 	}
 
@@ -75,13 +72,13 @@ public interface ITooltip extends NarrationSupplier {
 	 *
 	 * @param element the element to add
 	 */
-	default void add(LayoutElement element) {
+	default void add(Element element) {
 		add(size(), element);
 	}
 
-	default void add(int index, List<? extends LayoutElement> elements) {
+	default void add(int index, List<? extends Element> elements) {
 		boolean first = true;
-		for (LayoutElement element : elements) {
+		for (Element element : elements) {
 			if (first) {
 				add(index, element);
 			} else {
@@ -91,11 +88,11 @@ public interface ITooltip extends NarrationSupplier {
 		}
 	}
 
-	default void add(List<? extends LayoutElement> elements) {
+	default void add(List<? extends Element> elements) {
 		add(size(), elements);
 	}
 
-	void add(int index, LayoutElement element);
+	void add(int index, Element element);
 
 	/**
 	 * Appends a text component to the last line.
@@ -104,7 +101,7 @@ public interface ITooltip extends NarrationSupplier {
 	 *
 	 * @param component the text to append
 	 */
-	default void append(Component component) {
+	default void append(ITextComponent component) {
 		append(component, null);
 	}
 
@@ -114,7 +111,7 @@ public interface ITooltip extends NarrationSupplier {
 	 * @param component the text to append
 	 * @param tag optional identifier used for later replacement or removal
 	 */
-	default void append(Component component, @Nullable Identifier tag) {
+	default void append(ITextComponent component, @Nullable ResourceLocation tag) {
 		append(JadeUI.text(component).tag(tag));
 	}
 
@@ -123,20 +120,20 @@ public interface ITooltip extends NarrationSupplier {
 	 *
 	 * @param element the element to append
 	 */
-	default void append(LayoutElement element) {
+	default void append(Element element) {
 		append(size() - 1, element);
 	}
 
 	/**
 	 * Append render-able elements to the last line
 	 */
-	default void append(int index, List<? extends LayoutElement> elements) {
-		for (LayoutElement element : elements) {
+	default void append(int index, List<? extends Element> elements) {
+		for (Element element : elements) {
 			append(index, element);
 		}
 	}
 
-	void append(int index, LayoutElement element);
+	void append(int index, Element element);
 
 	/**
 	 * Removes every element tagged with the given identifier.
@@ -145,7 +142,7 @@ public interface ITooltip extends NarrationSupplier {
 	 * @return {@code true} if at least one element was removed
 	 *
 	 */
-	boolean remove(Identifier tag);
+	boolean remove(ResourceLocation tag);
 
 	/**
 	 * Replaces every element tagged with the given identifier at the position of the first matching element.
@@ -155,7 +152,7 @@ public interface ITooltip extends NarrationSupplier {
 	 * @return {@code true} if at least one element was replaced
 	 *
 	 */
-	boolean replace(Identifier tag, UnaryOperator<List<List<LayoutElement>>> elements);
+	boolean replace(ResourceLocation tag, UnaryOperator<List<List<Element>>> elements);
 
 	/**
 	 * Replaces every element tagged with the given identifier using a single text component.
@@ -164,7 +161,7 @@ public interface ITooltip extends NarrationSupplier {
 	 * @param component replacement text
 	 * @return {@code true} if at least one element was replaced
 	 */
-	boolean replace(Identifier tag, Component component);
+	boolean replace(ResourceLocation tag, ITextComponent component);
 
 	/**
 	 * Returns all elements tagged with the given identifier.
@@ -172,7 +169,7 @@ public interface ITooltip extends NarrationSupplier {
 	 * @param tag the tag to query
 	 * @return the tagged elements, in tooltip order
 	 */
-	List<LayoutElement> get(Identifier tag);
+	List<Element> get(ResourceLocation tag);
 
 	/**
 	 * Sets the margin for one side of a line.
@@ -189,7 +186,7 @@ public interface ITooltip extends NarrationSupplier {
 	 * @param index the line index
 	 * @param settings settings transformer
 	 */
-	void setLineSettings(int index, UnaryOperator<LayoutSettings> settings);
+	void setLineSettings(int index, UnaryOperator<Object> settings);
 
 	/**
 	 * Returns the narration text for this tooltip.
@@ -204,7 +201,7 @@ public interface ITooltip extends NarrationSupplier {
 	 * @param tag the tag to query
 	 * @return the rendered text for the tagged elements
 	 */
-	String getString(Identifier tag);
+	String getString(ResourceLocation tag);
 
 	/**
 	 * Returns the current icon element, if any.

@@ -2,46 +2,49 @@ package snownee.jade.api.fluid;
 
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import net.minecraft.core.Holder;
-import net.minecraft.core.TypedInstance;
-import net.minecraft.core.component.DataComponentPatch;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.world.level.material.Fluid;
-import net.minecraft.world.level.material.Fluids;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.PacketBuffer;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidRegistry;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import snownee.jade.api.DataCodec;
 import snownee.jade.util.CommonProxy;
 
 /**
  * Fluid stack representation used by Jade's client and network codecs.
  */
-public class JadeFluidObject implements TypedInstance<Fluid> {
+public class JadeFluidObject {
 	/**
-	 * Codec for serialized fluid objects.
+	 * Codec for serialized fluid objects. (1.12.2: stubbed to a simple fluid-name/amount record.)
 	 */
 	public static final Codec<JadeFluidObject> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-					BuiltInRegistries.FLUID.holderByNameCodec().fieldOf("type").forGetter(JadeFluidObject::typeHolder),
-					Codec.LONG.fieldOf("amount").forGetter(JadeFluidObject::getAmount),
-					DataComponentPatch.CODEC.optionalFieldOf("components", DataComponentPatch.EMPTY).forGetter(JadeFluidObject::getComponents))
-			.apply(instance, JadeFluidObject::new));
+					Codec.STRING.fieldOf("type").forGetter(o -> o.fluid.getName()),
+					Codec.LONG.fieldOf("amount").forGetter(JadeFluidObject::getAmount))
+			.apply(instance, JadeFluidObject::of));
 
 	/**
-	 * Network codec for fluid objects.
+	 * Network codec for fluid objects. (1.12.2: transmits fluid registry name + amount.)
 	 */
-	public static final StreamCodec<RegistryFriendlyByteBuf, JadeFluidObject> STREAM_CODEC = StreamCodec.composite(
-			ByteBufCodecs.holderRegistry(Registries.FLUID),
-			JadeFluidObject::typeHolder,
-			ByteBufCodecs.LONG,
-			JadeFluidObject::getAmount,
-			DataComponentPatch.STREAM_CODEC,
-			JadeFluidObject::getComponents,
-			JadeFluidObject::new);
+	public static final DataCodec<JadeFluidObject> STREAM_CODEC = new DataCodec<>() {
+		@Override
+		public JadeFluidObject decode(PacketBuffer buf) {
+			return of(buf.readString(32767), buf.readLong());
+		}
+
+		@Override
+		public void encode(PacketBuffer buf, JadeFluidObject o) {
+			buf.writeString(o.fluid.getName());
+			buf.writeLong(o.amount);
+		}
+	};
 
 	/**
 	 * Returns the amount represented by one bucket.
@@ -61,13 +64,37 @@ public class JadeFluidObject implements TypedInstance<Fluid> {
 		return CommonProxy.blockVolume();
 	}
 
+	private static final JadeFluidObject EMPTY = of(FluidRegistry.WATER, 0);
+
 	/**
 	 * Creates an empty fluid object.
 	 *
 	 * @return empty fluid object
 	 */
 	public static JadeFluidObject empty() {
-		return of(Fluids.EMPTY, 0);
+		return EMPTY;
+	}
+
+	public static JadeFluidObject of(String name, long amount) {
+		Fluid fluid = FluidRegistry.getFluid(name);
+		if (fluid == null) {
+			fluid = FluidRegistry.WATER;
+		}
+		return of(fluid, amount);
+	}
+
+	/**
+	 * Creates a fluid object with the given name, amount and tag.
+	 *
+	 * @param name fluid registry name
+	 * @param amount amount in millibuckets
+	 * @param tag optional fluid stack tag
+	 * @return fluid object
+	 */
+	public static JadeFluidObject of(String name, long amount, @Nullable NBTTagCompound tag) {
+		JadeFluidObject object = of(name, amount);
+		object.tag = tag;
+		return object;
 	}
 
 	/**
@@ -88,49 +115,27 @@ public class JadeFluidObject implements TypedInstance<Fluid> {
 	 * @return fluid object
 	 */
 	public static JadeFluidObject of(Fluid fluid, long amount) {
-		return of(fluid, amount, DataComponentPatch.EMPTY);
+		return new JadeFluidObject(fluid, amount);
 	}
 
-	/**
-	 * Creates a fluid object with the given amount and components.
-	 *
-	 * @param fluid fluid type
-	 * @param amount amount in millibuckets
-	 * @param components attached data components
-	 * @return fluid object
-	 */
-	@SuppressWarnings("deprecation")
-	public static JadeFluidObject of(Fluid fluid, long amount, DataComponentPatch components) {
-		return new JadeFluidObject(fluid.builtInRegistryHolder(), amount, components);
-	}
-
-	private final Holder<Fluid> type;
+	private final Fluid fluid;
 	private final long amount;
-	private final DataComponentPatch components;
+	@Nullable
+	private NBTTagCompound tag;
 
 	/**
 	 * Creates a fluid object.
 	 *
-	 * @param type fluid holder
+	 * @param fluid fluid type
 	 * @param amount amount in millibuckets
-	 * @param components attached data components
 	 */
-	private JadeFluidObject(Holder<Fluid> type, long amount, DataComponentPatch components) {
-		this.type = type;
+	private JadeFluidObject(Fluid fluid, long amount) {
+		this.fluid = Objects.requireNonNull(fluid);
 		this.amount = amount;
-		this.components = components;
-		Objects.requireNonNull(type);
-		Objects.requireNonNull(components);
 	}
 
-	/**
-	 * Returns the fluid holder.
-	 *
-	 * @return fluid holder
-	 */
-	@Override
-	public Holder<Fluid> typeHolder() {
-		return type;
+	public Fluid getFluid() {
+		return fluid;
 	}
 
 	/**
@@ -143,12 +148,13 @@ public class JadeFluidObject implements TypedInstance<Fluid> {
 	}
 
 	/**
-	 * Returns the attached data components.
+	 * Returns the attached NBT tag, if any.
 	 *
-	 * @return data component patch
+	 * @return fluid stack tag, or {@code null}
 	 */
-	public DataComponentPatch getComponents() {
-		return components;
+	@Nullable
+	public NBTTagCompound getTag() {
+		return tag;
 	}
 
 	/**
@@ -157,7 +163,11 @@ public class JadeFluidObject implements TypedInstance<Fluid> {
 	 * @return {@code true} if empty
 	 */
 	public boolean isEmpty() {
-		return is(Fluids.EMPTY) || getAmount() == 0;
+		return amount == 0;
+	}
+
+	public boolean is(Fluid other) {
+		return fluid == other;
 	}
 
 	/**
@@ -165,22 +175,12 @@ public class JadeFluidObject implements TypedInstance<Fluid> {
 	 *
 	 * @return fluid name
 	 */
-	public Component getDisplayName() {
-		return CommonProxy.getFluidName(this);
+	public ITextComponent getDisplayName() {
+		// 1.12.2: CommonProxy.getFluidName returns a plain String; wrap it in a component
+		return new TextComponentString(CommonProxy.getFluidName(this));
 	}
 
-	/**
-	 * Returns whether two fluid objects represent the same fluid and matching components.
-	 *
-	 * @param first first fluid object
-	 * @param second second fluid object
-	 * @return {@code true} if both objects are equivalent for display
-	 */
 	public static boolean isSameFluidSameComponents(JadeFluidObject first, JadeFluidObject second) {
-		if (first.type != second.type) {
-			return false;
-		} else {
-			return first.isEmpty() && second.isEmpty() || Objects.equals(first.components, second.components);
-		}
+		return first.fluid == second.fluid;
 	}
 }

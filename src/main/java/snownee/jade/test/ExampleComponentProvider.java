@@ -3,16 +3,15 @@ package snownee.jade.test;
 import java.util.List;
 import java.util.Optional;
 
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.network.chat.ClickEvent;
-import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.Style;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
-import net.minecraft.world.item.Items;
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.event.ClickEvent;
+import net.minecraft.util.text.event.HoverEvent;
+import net.minecraft.util.text.Style;
 import snownee.jade.Jade;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
@@ -21,44 +20,47 @@ import snownee.jade.api.JadeIds;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.ui.Element;
 import snownee.jade.api.ui.JadeUI;
-import snownee.jade.gui.LayoutWithPadding;
 
 public class ExampleComponentProvider implements IBlockComponentProvider {
 	public static final ExampleComponentProvider INSTANCE = new ExampleComponentProvider();
 
 	@Override
 	public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-		tooltip.add(Button.builder(
-				CommonComponents.GUI_DONE, _ -> {
-					Jade.LOGGER.info("Button clicked in ExampleComponentProvider");
-				}).build());
-		tooltip.add(new LayoutWithPadding(JadeUI.item(new ItemStack(Items.DIAMOND)), 2, 2, 2, 2));
+		// 1.12.2: api/ui has no Button element (GuiButton is a screen widget, not a tooltip element),
+		// so the modern Button.builder(...) demo is rendered as a plain text element.
+		tooltip.add(JadeUI.text(new TextComponentString("Done")));
+		// 1.12.2: translated ITooltip has no add(LayoutElement) overload, so the modern
+		// LayoutWithPadding-wrapped item is added as a plain item element instead.
+		tooltip.add(JadeUI.item(new ItemStack(Items.DIAMOND)));
 		Optional<Integer> fuel = ExampleDataProvider.INSTANCE.decodeFromData(accessor);
 		if (fuel.isPresent()) {
 			Element icon = JadeUI.smallItem(new ItemStack(Items.CLOCK));
 			tooltip.add(icon);
-			tooltip.append(Component.translatable("mymod.fuel", fuel.orElse(0)));
+			tooltip.append(new TextComponentTranslation("mymod.fuel", fuel.orElse(0)));
 		}
 
-		Component test1 = Component.literal("1").withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowText(Component.literal("1"))));
-		Component test2 = Component.literal("2")
-				.withStyle(Style.EMPTY.withHoverEvent(new HoverEvent.ShowItem(new ItemStackTemplate(Items.DIAMOND))));
-		Component test3 = Component.translatable("container.dropper")
-				.withStyle(Style.EMPTY.withClickEvent(new ClickEvent.CopyToClipboard("test")));
-		tooltip.add(JadeUI.text(test1).flexGrow(1));
-		tooltip.append(JadeUI.text(test2).flexGrow(1));
-		tooltip.append(JadeUI.text(test3).flexGrow(2));
+		Style test1Style = new Style().setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new TextComponentString("1")));
+		Element test1 = JadeUI.text(new TextComponentString("1").setStyle(test1Style)).flexGrow(1);
+		Style test2Style = new Style().setHoverEvent(new HoverEvent(
+				HoverEvent.Action.SHOW_ITEM,
+				new TextComponentString(new ItemStack(Items.DIAMOND).writeToNBT(new NBTTagCompound()).toString())));
+		Element test2 = JadeUI.text(new TextComponentString("2").setStyle(test2Style)).flexGrow(1);
+		Style test3Style = new Style().setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "test"));
+		Element test3 = JadeUI.text(new TextComponentTranslation("container.dropper").setStyle(test3Style)).flexGrow(2);
+		tooltip.add(test1);
+		tooltip.append(test2);
+		tooltip.append(test3);
 
-		tooltip.add(JadeUI.text(test1).flexGrow(1));
-		tooltip.append(JadeUI.text(test2).flexGrow(0));
-		tooltip.append(JadeUI.text(test3).flexGrow(2));
+		tooltip.add(JadeUI.text(new TextComponentString("1").setStyle(test1Style)).flexGrow(1));
+		tooltip.append(JadeUI.text(new TextComponentString("2").setStyle(test2Style)).flexGrow(0));
+		tooltip.append(JadeUI.text(new TextComponentTranslation("container.dropper").setStyle(test3Style)).flexGrow(2));
 
-		Element text = JadeUI.text(Component.literal("test"));
+		Element text = JadeUI.text(new TextComponentString("test"));
 		tooltip.replace(JadeIds.CORE_OBJECT_NAME, $ -> List.of(List.of(text)));
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return ExamplePlugin.UID_TEST_FUEL;
 	}
 

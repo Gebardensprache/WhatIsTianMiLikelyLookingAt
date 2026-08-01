@@ -6,7 +6,7 @@ import java.util.Objects;
 import com.google.common.collect.Maps;
 import com.mojang.serialization.Codec;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.Jade;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.impl.WailaClientRegistration;
@@ -18,42 +18,42 @@ public class ClientPluginConfig implements IPluginConfig {
 			ClientPluginConfig::new,
 			IPluginConfig::values);
 
-	private final Map<Identifier, Object> values;
-	private final Map<Identifier, Object> mergedValues = Maps.newHashMap();
+	private final Map<ResourceLocation, Object> values;
+	private final Map<ResourceLocation, Object> mergedValues = Maps.newHashMap();
 
-	private ClientPluginConfig(Map<Identifier, Object> values) {
+	private ClientPluginConfig(Map<ResourceLocation, Object> values) {
 		this.values = values;
 		mergedValues.putAll(values);
 	}
 
 	@Override
-	public boolean get(Identifier key) {
+	public boolean get(ResourceLocation key) {
 		return (Boolean) Objects.requireNonNull(mergedValues.get(key));
 	}
 
 	@Override
-	public <T extends Enum<T>> T getEnum(Identifier key) {
+	public <T extends Enum<T>> T getEnum(ResourceLocation key) {
 		//noinspection unchecked
 		return (T) Objects.requireNonNull(mergedValues.get(key));
 	}
 
 	@Override
-	public int getInt(Identifier key) {
+	public int getInt(ResourceLocation key) {
 		return ((Number) mergedValues.get(key)).intValue();
 	}
 
 	@Override
-	public float getFloat(Identifier key) {
+	public float getFloat(ResourceLocation key) {
 		return ((Number) mergedValues.get(key)).floatValue();
 	}
 
 	@Override
-	public String getString(Identifier key) {
+	public String getString(ResourceLocation key) {
 		return (String) Objects.requireNonNull(mergedValues.get(key));
 	}
 
 	@Override
-	public boolean set(Identifier key, Object value) {
+	public boolean set(ResourceLocation key, Object value) {
 		Objects.requireNonNull(value);
 		ConfigEntry<?> entry = WailaClientRegistration.instance().getConfigEntry(key);
 		if (entry == null) {
@@ -78,12 +78,12 @@ public class ClientPluginConfig implements IPluginConfig {
 	}
 
 	@Override
-	public Map<Identifier, Object> values() {
+	public Map<ResourceLocation, Object> values() {
 		return values;
 	}
 
 	public void ensureEntry(ConfigEntry<?> entry) {
-		Identifier key = entry.id();
+		ResourceLocation key = entry.id();
 		Object value = values.get(key);
 		if (value == null) {
 			values.put(key, value = entry.defaultValue());

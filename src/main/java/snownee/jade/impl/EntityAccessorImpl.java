@@ -9,19 +9,18 @@ import org.jspecify.annotations.Nullable;
 
 import com.google.common.base.Suppliers;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.Entity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.world.World;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.RayTraceResult;
 import snownee.jade.Jade;
 import snownee.jade.api.AccessorImpl;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IServerDataProvider;
 import snownee.jade.network.RequestEntityPacket;
@@ -32,7 +31,7 @@ import snownee.jade.util.WailaExceptionHandler;
 /**
  * Class to get information of entity target and context.
  */
-public class EntityAccessorImpl extends AccessorImpl<EntityHitResult> implements EntityAccessor {
+public class EntityAccessorImpl extends AccessorImpl<RayTraceResult> implements EntityAccessor {
 
 	private final Supplier<Entity> entity;
 
@@ -47,8 +46,8 @@ public class EntityAccessorImpl extends AccessorImpl<EntityHitResult> implements
 		entity = Objects.requireNonNull(builder.entity);
 	}
 
-	public static void handleRequest(RequestEntityPacket message, ServerPayloadContext context, Consumer<CompoundTag> responseSender) {
-		ServerPlayer player = context.player();
+	public static void handleRequest(RequestEntityPacket message, ServerPayloadContext context, Consumer<NBTTagCompound> responseSender) {
+		EntityPlayerMP player = context.player();
 		context.execute(() -> {
 			EntityAccessor accessor = message.data().unpack(player);
 			if (accessor == null) {
@@ -56,10 +55,10 @@ public class EntityAccessorImpl extends AccessorImpl<EntityHitResult> implements
 			}
 
 			Entity entity = accessor.getEntity();
-			CompoundTag tag = accessor.getServerData();
-			tag.putInt("EntityId", entity.getId());
+			NBTTagCompound tag = accessor.getServerData();
+			tag.setInteger("EntityId", entity.getEntityId());
 
-			if (Jade.isOutOfReach(player, entity.blockPosition(), player.entityInteractionRange())) {
+			if (Jade.isOutOfReach(player, entity.getPosition(), player.getEntityAttribute(EntityPlayer.REACH_DISTANCE).getAttributeValue())) {
 				responseSender.accept(tag);
 				return;
 			}
@@ -103,38 +102,38 @@ public class EntityAccessorImpl extends AccessorImpl<EntityHitResult> implements
 	}
 
 	@Override
-	public boolean verifyData(CompoundTag data) {
+	public boolean verifyData(NBTTagCompound data) {
 		if (!verify) {
 			return true;
 		}
-		return data.getInt("EntityId").filter(id -> id == getEntity().getId()).isPresent();
+		return data.getInteger("EntityId") == getEntity().getEntityId();
 	}
 
 	public static class Builder implements EntityAccessor.Builder {
 
 		public boolean showDetails;
-		private @Nullable Level level;
-		private @Nullable Player player;
-		private @Nullable CompoundTag serverData;
+		private @Nullable World level;
+		private @Nullable EntityPlayer player;
+		private @Nullable NBTTagCompound serverData;
 		private boolean connected;
-		private @Nullable Supplier<EntityHitResult> hit;
+		private @Nullable Supplier<RayTraceResult> hit;
 		private @Nullable Supplier<Entity> entity;
 		private boolean verify;
 
 		@Override
-		public Builder level(Level level) {
+		public Builder level(World level) {
 			this.level = level;
 			return this;
 		}
 
 		@Override
-		public Builder player(Player player) {
+		public Builder player(EntityPlayer player) {
 			this.player = player;
 			return this;
 		}
 
 		@Override
-		public Builder serverData(@Nullable CompoundTag serverData) {
+		public Builder serverData(@Nullable NBTTagCompound serverData) {
 			this.serverData = serverData;
 			return this;
 		}
@@ -152,7 +151,7 @@ public class EntityAccessorImpl extends AccessorImpl<EntityHitResult> implements
 		}
 
 		@Override
-		public Builder hit(Supplier<EntityHitResult> hit) {
+		public Builder hit(Supplier<RayTraceResult> hit) {
 			this.hit = hit;
 			return this;
 		}
@@ -192,42 +191,51 @@ public class EntityAccessorImpl extends AccessorImpl<EntityHitResult> implements
 		}
 	}
 
-	public record SyncData(boolean showDetails, int id, int partIndex, Vec3 hitVec, CompoundTag data) {
-		public static final StreamCodec<RegistryFriendlyByteBuf, SyncData> STREAM_CODEC = StreamCodec.composite(
-				ByteBufCodecs.BOOL,
-				SyncData::showDetails,
-				ByteBufCodecs.VAR_INT,
-				SyncData::id,
-				ByteBufCodecs.VAR_INT,
-				SyncData::partIndex,
-				ByteBufCodecs.VECTOR3F.map(Vec3::new, Vec3::toVector3f),
-				SyncData::hitVec,
-				ByteBufCodecs.COMPOUND_TAG,
-				SyncData::data,
-				SyncData::new
-		);
+	public record SyncData(boolean showDetails, int id, int partIndex, Vec3d hitVec, NBTTagCompound data) {
+		public static final DataCodec<SyncData> STREAM_CODEC = new DataCodec<>() {
+			@Override
+			public SyncData decode(PacketBuffer buf) {
+				boolean showDetails = buf.readBoolean();
+				int id = buf.readVarInt();
+				int partIndex = buf.readVarInt();
+				Vec3d hitVec = new Vec3d(buf.readFloat(), buf.readFloat(), buf.readFloat());
+				NBTTagCompound data = DataCodec.readTag(buf);
+				return new SyncData(showDetails, id, partIndex, hitVec, data);
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, SyncData value) {
+				buf.writeBoolean(value.showDetails);
+				buf.writeVarInt(value.id);
+				buf.writeVarInt(value.partIndex);
+				buf.writeFloat((float) value.hitVec.x);
+				buf.writeFloat((float) value.hitVec.y);
+				buf.writeFloat((float) value.hitVec.z);
+				buf.writeCompoundTag(value.data);
+			}
+		};
 
 		public SyncData(EntityAccessor accessor) {
 			this(
 					accessor.showDetails(),
-					accessor.getEntity().getId(),
+					accessor.getEntity().getEntityId(),
 					CommonProxy.getPartEntityIndex(accessor.getRawEntity()),
-					accessor.getHitResult().getLocation(),
+					accessor.getHitResult().hitVec,
 					accessor.getServerData());
 		}
 
 		@Nullable
-		public EntityAccessor unpack(ServerPlayer player) {
-			Entity entity = CommonProxy.getPartEntity(player.level().getEntity(id), partIndex);
+		public EntityAccessor unpack(EntityPlayerMP player) {
+			Entity entity = CommonProxy.getPartEntity(player.getEntityWorld().getEntityByID(id), partIndex);
 			if (entity == null) {
 				return null;
 			}
 			return new EntityAccessorImpl.Builder()
-					.level(player.level())
+					.level(player.getEntityWorld())
 					.player(player)
 					.showDetails(showDetails)
 					.entity(() -> entity)
-					.hit(Suppliers.memoize(() -> new EntityHitResult(entity, hitVec)))
+					.hit(Suppliers.memoize(() -> new RayTraceResult(entity, hitVec)))
 					.serverData(data)
 					.build();
 		}

@@ -2,14 +2,12 @@ package snownee.jade.addon.vanilla;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.AgeableMob;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.animal.frog.Tadpole;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityAgeable;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextComponentTranslation;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IEntityComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -23,34 +21,37 @@ public class MobGrowthProvider implements StreamServerDataProvider<EntityAccesso
 
 	@Override
 	public @Nullable Integer streamData(EntityAccessor accessor) {
-		int time = -1;
 		Entity entity = accessor.getEntity();
-		if (entity instanceof AgeableMob ageable) {
-			time = -ageable.getAge();
-		} else if (entity instanceof Tadpole tadpole) {
-			time = tadpole.getTicksLeftUntilAdult();
+		if (!(entity instanceof EntityAgeable)) {
+			return null;
 		}
+		int time = -((EntityAgeable) entity).getGrowingAge();
 		return time > 0 ? time : null;
 	}
 
 	@Override
 	public boolean shouldRequestData(EntityAccessor accessor) {
-		Entity entity = accessor.getEntity();
-		if (entity instanceof AgeableMob ageable) {
-			return ageable.isBaby() && !ageable.isAgeLocked();
-		} else if (entity instanceof Tadpole tadpole) {
-			return !tadpole.isAgeLocked();
-		}
-		return false;
+		// 1.12.2: EntityAgeable has no age-lock state or tadpole equivalent.
+		return accessor.getEntity() instanceof EntityAgeable && ((EntityAgeable) accessor.getEntity()).isChild();
 	}
 
 	@Override
-	public StreamCodec<RegistryFriendlyByteBuf, Integer> streamCodec() {
-		return ByteBufCodecs.VAR_INT.cast();
+	public DataCodec<Integer> streamCodec() {
+		return new DataCodec<>() {
+			@Override
+			public Integer decode(PacketBuffer buf) {
+				return buf.readVarInt();
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, Integer value) {
+				buf.writeVarInt(value);
+			}
+		};
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_MOB_GROWTH;
 	}
 
@@ -59,27 +60,15 @@ public class MobGrowthProvider implements StreamServerDataProvider<EntityAccesso
 
 		@Override
 		public void appendTooltip(ITooltip tooltip, EntityAccessor accessor, IPluginConfig config) {
-			boolean ageLocked = false;
-			Entity entity = accessor.getEntity();
-			if (entity instanceof AgeableMob ageable) {
-				ageLocked = ageable.isBaby() && ageable.isAgeLocked();
-			} else if (entity instanceof Tadpole tadpole) {
-				ageLocked = tadpole.isAgeLocked();
-			}
-			if (ageLocked) {
-				tooltip.add(Component.translatable(
-						"jade.mobgrowth.time",
-						IThemeHelper.get().info(Component.translatable("jade.mobgrowth.paused"))));
-				return;
-			}
 			int time = MobGrowthProvider.INSTANCE.decodeFromData(accessor).orElse(0);
 			if (time > 0) {
-				tooltip.add(Component.translatable("jade.mobgrowth.time", IThemeHelper.get().seconds(time, accessor.tickRate())));
+				// 1.12.2: fixed 20-tick seconds formatting.
+				tooltip.add(new TextComponentTranslation("jade.mobgrowth.time", IThemeHelper.get().seconds(time, accessor.tickRate())));
 			}
 		}
 
 		@Override
-		public Identifier getUid() {
+		public ResourceLocation getUid() {
 			return JadeIds.MC_MOB_GROWTH;
 		}
 	}

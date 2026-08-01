@@ -1,0 +1,17 @@
+[
+  {
+    "modid": "theoneprobe",
+    "name": "Jade TOP Compatibility",
+    "version": "1.0.0",
+    "mcversion": "1.12.2",
+    "description": "Jade backport compatibility shim. Declares the legacy 'theoneprobe' mod id so third-party TOP integrations link against this dummy mod while rendering through Jade. Requires Jade (jade).",
+    "authorList": [
+      "Snownee"
+    ],
+    "credits": "McJty",
+    "url": "https://www.curseforge.com/minecraft/mc-mods/jade",
+    "dependencies": [
+      "jade"
+    ]
+  }
+]

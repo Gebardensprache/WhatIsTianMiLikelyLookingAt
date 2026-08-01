@@ -2,14 +2,14 @@ package snownee.jade.impl.config.entry;
 
 import java.util.function.BiConsumer;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.gui.config.OptionsList;
 import snownee.jade.gui.config.value.OptionValue;
 
 public class BooleanConfigEntry extends ConfigEntry<Boolean> {
 
-	public BooleanConfigEntry(Identifier id, boolean defaultValue) {
+	public BooleanConfigEntry(ResourceLocation id, boolean defaultValue) {
 		super(id, defaultValue);
 	}
 
@@ -33,7 +33,7 @@ public class BooleanConfigEntry extends ConfigEntry<Boolean> {
 			OptionsList options,
 			String optionName,
 			IPluginConfig config,
-			BiConsumer<Identifier, Object> setter) {
+			BiConsumer<ResourceLocation, Object> setter) {
 		return options.choices(optionName, () -> config.get(id), b -> setter.accept(id, b));
 	}
 

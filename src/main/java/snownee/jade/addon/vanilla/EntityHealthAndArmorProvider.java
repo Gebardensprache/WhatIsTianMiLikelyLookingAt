@@ -6,14 +6,13 @@ import org.jspecify.annotations.Nullable;
 
 import com.google.common.collect.Lists;
 
-import net.minecraft.client.gui.Hud;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.decoration.ArmorStand;
-import net.minecraft.world.entity.monster.creaking.Creaking;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.boss.EntityDragon;
+import net.minecraft.entity.boss.EntityWither;
+import net.minecraft.entity.item.EntityArmorStand;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.ResourceLocation;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IEntityComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -30,22 +29,32 @@ public class EntityHealthAndArmorProvider implements StreamServerDataProvider<En
 
 	@Override
 	public @Nullable Float streamData(EntityAccessor accessor) {
-		float absorption = ((LivingEntity) accessor.getEntity()).getAbsorptionAmount();
+		float absorption = ((EntityLivingBase) accessor.getEntity()).getAbsorptionAmount();
 		return absorption > 0 ? absorption : 0;
 	}
 
 	@Override
-	public StreamCodec<RegistryFriendlyByteBuf, Float> streamCodec() {
-		return ByteBufCodecs.FLOAT.cast();
+	public DataCodec<Float> streamCodec() {
+		return new DataCodec<>() {
+			@Override
+			public Float decode(PacketBuffer buf) {
+				return buf.readFloat();
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, Float value) {
+				buf.writeFloat(value);
+			}
+		};
 	}
 
 	@Override
 	public boolean shouldRequestData(EntityAccessor accessor) {
-		return EntityHealthAndArmorProvider.isHealthVisible((LivingEntity) accessor.getEntity());
+		return isHealthVisible((EntityLivingBase) accessor.getEntity());
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_ENTITY_HEALTH;
 	}
 
@@ -54,8 +63,10 @@ public class EntityHealthAndArmorProvider implements StreamServerDataProvider<En
 		return -8000;
 	}
 
-	private static boolean isHealthVisible(LivingEntity entity) {
-		return !(entity instanceof ArmorStand || entity instanceof Creaking);
+	private static boolean isHealthVisible(EntityLivingBase entity) {
+		return !(entity instanceof EntityArmorStand)
+				&& !(entity instanceof EntityDragon)
+				&& !(entity instanceof EntityWither);
 	}
 
 	public static class Client extends EntityHealthAndArmorProvider implements IEntityComponentProvider {
@@ -66,21 +77,18 @@ public class EntityHealthAndArmorProvider implements StreamServerDataProvider<En
 			boolean healthText = false;
 			boolean armorText = false;
 			List<Element> elements = Lists.newArrayListWithExpectedSize(2);
-			LivingEntity living = (LivingEntity) accessor.getEntity();
+			EntityLivingBase living = (EntityLivingBase) accessor.getEntity();
 			if (config.get(JadeIds.MC_ENTITY_HEALTH) && isHealthVisible(living)) {
 				float health = living.getHealth();
 				float maxHealth = living.getMaxHealth();
 				float absorption = decodeFromData(accessor).orElse(0F);
-				HealthElement healthElement = new HealthElement(
-						living.isFullyFrozen() ? Hud.HeartType.FROZEN : Hud.HeartType.NORMAL,
-						maxHealth,
-						health,
-						absorption);
+				// 1.12.2: frozen-heart sprites do not exist.
+				HealthElement healthElement = new HealthElement(maxHealth, health, absorption);
 				elements.add(healthElement.tag(JadeIds.MC_ENTITY_HEALTH));
 				healthText = healthElement.showText();
 			}
-			if (config.get(JadeIds.MC_ENTITY_ARMOR) && living.getArmorValue() > 0) {
-				ArmorElement armorElement = new ArmorElement(living.getArmorValue());
+			if (config.get(JadeIds.MC_ENTITY_ARMOR) && living.getTotalArmorValue() > 0) {
+				ArmorElement armorElement = new ArmorElement(living.getTotalArmorValue());
 				elements.add(armorElement.tag(JadeIds.MC_ENTITY_ARMOR));
 				armorText = armorElement.showText();
 			}

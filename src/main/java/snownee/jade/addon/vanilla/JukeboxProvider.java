@@ -2,16 +2,16 @@ package snownee.jade.addon.vanilla;
 
 import java.util.Optional;
 
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.JukeboxPlayable;
-import net.minecraft.world.level.block.JukeboxBlock;
-import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
+import net.minecraft.block.BlockJukebox;
+import net.minecraft.item.ItemRecord;
+import net.minecraft.item.ItemStack;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
 import snownee.jade.api.BlockAccessor;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.JadeIds;
@@ -24,21 +24,31 @@ public class JukeboxProvider implements StreamServerDataProvider<BlockAccessor, 
 
 	@Override
 	public boolean shouldRequestData(BlockAccessor accessor) {
-		return accessor.getBlockState().getValue(JukeboxBlock.HAS_RECORD);
+		return accessor.getBlockState().getValue(BlockJukebox.HAS_RECORD);
 	}
 
 	@Override
 	public ItemStack streamData(BlockAccessor accessor) {
-		return accessor.<JukeboxBlockEntity>typedBlockEntity().getTheItem();
+		return accessor.<BlockJukebox.TileEntityJukebox>typedBlockEntity().getRecord();
 	}
 
 	@Override
-	public StreamCodec<RegistryFriendlyByteBuf, ItemStack> streamCodec() {
-		return ItemStack.OPTIONAL_STREAM_CODEC;
+	public DataCodec<ItemStack> streamCodec() {
+		return new DataCodec<>() {
+			@Override
+			public ItemStack decode(PacketBuffer buf) {
+				return DataCodec.readStack(buf);
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, ItemStack value) {
+				buf.writeItemStack(value);
+			}
+		};
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_JUKEBOX;
 	}
 
@@ -48,26 +58,25 @@ public class JukeboxProvider implements StreamServerDataProvider<BlockAccessor, 
 		@Override
 		public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
 			Optional<ItemStack> result = JukeboxProvider.INSTANCE.decodeFromData(accessor);
-			if (result.isEmpty()) {
+			if (!result.isPresent()) {
 				return;
 			}
 			ItemStack stack = result.get();
 			if (stack.isEmpty()) {
-				tooltip.add(Component.translatable("tooltip.jade.empty"));
+				tooltip.add((ITextComponent) new TextComponentTranslation("tooltip.jade.empty"));
 				return;
 			}
-			Component name;
-			JukeboxPlayable playable = stack.get(DataComponents.JUKEBOX_PLAYABLE);
-			if (playable != null) {
-				name = playable.song().value().description();
+			ITextComponent name;
+			if (stack.getItem() instanceof ItemRecord) {
+				name = (ITextComponent) new TextComponentString(((ItemRecord) stack.getItem()).getRecordNameLocal());
 			} else {
-				name = stack.getHoverName();
+				name = stack.getTextComponent();
 			}
-			tooltip.add(Component.translatable("record.nowPlaying", IDisplayHelper.get().stripColor(name)));
+			tooltip.add((ITextComponent) new TextComponentTranslation("record.nowPlaying", IDisplayHelper.get().stripColor(name)));
 		}
 
 		@Override
-		public Identifier getUid() {
+		public ResourceLocation getUid() {
 			return JadeIds.MC_JUKEBOX;
 		}
 	}

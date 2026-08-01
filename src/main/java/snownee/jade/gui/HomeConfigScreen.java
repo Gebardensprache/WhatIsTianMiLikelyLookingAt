@@ -3,46 +3,39 @@ package snownee.jade.gui;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
+import java.util.Random;
 
-import org.apache.commons.lang3.mutable.MutableInt;
 import org.jspecify.annotations.Nullable;
 
 import com.google.common.collect.Lists;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.ImageButton;
-import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.components.WidgetSprites;
-import net.minecraft.client.gui.screens.ConfirmLinkScreen;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.resources.language.I18n;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.Style;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.util.ARGB;
-import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
-import net.minecraft.util.StringDecomposer;
+import net.minecraft.client.audio.PositionedSoundRecord;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.GuiConfirmOpenLink;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.GuiYesNoCallback;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.init.SoundEvents;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.TextFormatting;
 import snownee.jade.Jade;
-import snownee.jade.api.JadeIds;
 import snownee.jade.api.config.IWailaConfig;
 import snownee.jade.impl.WailaClientRegistration;
 import snownee.jade.util.ModIdentification;
 import snownee.jade.util.SmoothChasingValue;
 
-public class HomeConfigScreen extends Screen {
+public class HomeConfigScreen extends GuiScreen {
 
-	private final RandomSource random = RandomSource.create(42);
-	private final @Nullable Screen parent;
+	private final Random random = new Random(42);
+	private final @Nullable GuiScreen parent;
 	private final SmoothChasingValue titleY;
 	private final List<TextParticle> particles = Lists.newArrayList();
 	private final List<TextParticle> pendingParticles = Lists.newArrayList();
@@ -54,8 +47,7 @@ public class HomeConfigScreen extends Screen {
 	private int lastMouseX;
 	private int lastMouseY;
 
-	public HomeConfigScreen(@Nullable Screen parent) {
-		super(Component.translatable("gui.jade.configuration"));
+	public HomeConfigScreen(@Nullable GuiScreen parent) {
 		this.parent = parent;
 		titleY = new SmoothChasingValue().start(8).target(32).withSpeed(0.1F);
 
@@ -73,27 +65,28 @@ public class HomeConfigScreen extends Screen {
 
 	private static boolean isLunarNewYear(LocalDate now) {
 		int year = now.getYear();
-		int newYearMonthAndDay = switch (year) {
-			case 2026 -> 217;
-			case 2027 -> 206;
-			case 2028 -> 126;
-			case 2029 -> 213;
-			case 2030 -> 203;
-			case 2031 -> 123;
-			case 2032 -> 211;
-			case 2033 -> 131;
-			case 2034 -> 219;
-			case 2035 -> 208;
-			case 2036 -> 128;
-			case 2037 -> 215;
-			case 2038 -> 204;
-			case 2039 -> 124;
-			case 2040 -> 212;
-			case 2041 -> 201;
-			case 2042 -> 122;
-			case 2043 -> 210;
-			default -> 0;
-		};
+		int newYearMonthAndDay;
+		switch (year) {
+			case 2026 -> newYearMonthAndDay = 217;
+			case 2027 -> newYearMonthAndDay = 206;
+			case 2028 -> newYearMonthAndDay = 126;
+			case 2029 -> newYearMonthAndDay = 213;
+			case 2030 -> newYearMonthAndDay = 203;
+			case 2031 -> newYearMonthAndDay = 123;
+			case 2032 -> newYearMonthAndDay = 211;
+			case 2033 -> newYearMonthAndDay = 131;
+			case 2034 -> newYearMonthAndDay = 219;
+			case 2035 -> newYearMonthAndDay = 208;
+			case 2036 -> newYearMonthAndDay = 128;
+			case 2037 -> newYearMonthAndDay = 215;
+			case 2038 -> newYearMonthAndDay = 204;
+			case 2039 -> newYearMonthAndDay = 124;
+			case 2040 -> newYearMonthAndDay = 212;
+			case 2041 -> newYearMonthAndDay = 201;
+			case 2042 -> newYearMonthAndDay = 122;
+			case 2043 -> newYearMonthAndDay = 210;
+			default -> newYearMonthAndDay = 0;
+		}
 		if (newYearMonthAndDay == 0) {
 			return false;
 		}
@@ -106,70 +99,118 @@ public class HomeConfigScreen extends Screen {
 	}
 
 	@Override
-	protected void init() {
-		Objects.requireNonNull(minecraft);
+	public void initGui() {
+		Objects.requireNonNull(mc);
 		particles.clear();
-		Component modSettings = Component.translatable("gui.jade.jade_settings");
-		Component pluginSettings = Component.translatable("gui.jade.plugin_settings");
-		Component profileSettings = Component.translatable("gui.jade.profile_settings");
-		int maxWidth = Math.max(100, Math.max(font.width(modSettings) + 8, font.width(pluginSettings) + 8));
+		ITextComponent modSettings = new TextComponentTranslation("gui.jade.jade_settings");
+		ITextComponent pluginSettings = new TextComponentTranslation("gui.jade.plugin_settings");
+		ITextComponent profileSettings = new TextComponentTranslation("gui.jade.profile_settings");
+		int maxWidth = Math.max(100, Math.max(mc.fontRenderer.getStringWidth(modSettings.getFormattedText()) + 8,
+				mc.fontRenderer.getStringWidth(pluginSettings.getFormattedText()) + 8));
 		maxWidth = Math.min(maxWidth, Math.min(240, width / 2 - 40));
 
-		addRenderableWidget(Button.builder(
-				modSettings, w -> {
-					visitedChildScreen();
-					minecraft.gui.setScreen(new WailaConfigScreen(HomeConfigScreen.this));
-				}).bounds(width / 2 - 5 - maxWidth, height / 2 - 10, maxWidth, 20).build());
-		addRenderableWidget(Button.builder(
-				pluginSettings, w -> {
-					visitedChildScreen();
-					minecraft.gui.setScreen(new PluginsConfigScreen(HomeConfigScreen.this));
-				}).bounds(width / 2 + 5, height / 2 - 10, maxWidth, 20).build());
-		ImageButton profileButton = new ImageButton(
-				width / 2 + 10 + maxWidth,
-				height / 2 - 10,
-				20,
-				20,
-				new WidgetSprites(JadeIds.JADE("profiles")),
-				_ -> {
-					visitedChildScreen();
-					minecraft.gui.setScreen(new ProfileConfigScreen(HomeConfigScreen.this));
-				},
-				profileSettings) {
+		buttonList.add(new GuiButton(0, width / 2 - 5 - maxWidth, height / 2 - 10, maxWidth, 20, modSettings.getFormattedText()) {
 			@Override
-			public void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
-				extractDefaultSprite(graphics);
-				super.extractContents(graphics, mouseX, mouseY, a);
+			public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+				if (super.mousePressed(mc, mouseX, mouseY)) {
+					visitedChildScreen();
+					mc.displayGuiScreen(new WailaConfigScreen(HomeConfigScreen.this));
+					return true;
+				}
+				return false;
 			}
-		};
-		profileButton.setTooltip(Tooltip.create(profileSettings));
-		addRenderableWidget(profileButton);
-		addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, w -> onClose())
-				.bounds(width / 2 - 50, height / 2 + 20, 100, 20)
-				.build());
+		});
+		buttonList.add(new GuiButton(1, width / 2 + 5, height / 2 - 10, maxWidth, 20, pluginSettings.getFormattedText()) {
+			@Override
+			public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+				if (super.mousePressed(mc, mouseX, mouseY)) {
+					visitedChildScreen();
+					mc.displayGuiScreen(new PluginsConfigScreen(HomeConfigScreen.this));
+					return true;
+				}
+				return false;
+			}
+		});
+		// 1.12.2: no profile sprite texture exists, so the profile button is a plain 20x20 button
+		buttonList.add(new GuiButton(2, width / 2 + 10 + maxWidth, height / 2 - 10, 20, 20, "☰") {
+			@Override
+			public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+				if (super.mousePressed(mc, mouseX, mouseY)) {
+					visitedChildScreen();
+					mc.displayGuiScreen(new ProfileConfigScreen(HomeConfigScreen.this));
+					return true;
+				}
+				return false;
+			}
+		});
+		buttonList.add(new GuiButton(3, width / 2 - 50, height / 2 + 20, 100, 20, I18n.format("gui.done")) {
+			@Override
+			public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+				if (super.mousePressed(mc, mouseX, mouseY)) {
+					onClose();
+					return true;
+				}
+				return false;
+			}
+		});
 
-		Style style = Style.EMPTY;
+		Style style = new Style();
 		if (festival != 0 && festival != 1) {
-			style = style.withColor(0xF1E3A4);
+			style.setColor(TextFormatting.GOLD);
 		}
-		Component title = Component.translatable("gui.jade.by", Component.literal("❤").withStyle(ChatFormatting.RED)).withStyle(style);
-		Component hoveredTitle = Component.translatable("gui.jade.by.hovered").withStyle(style);
-		int btnWidth = font.width(title);
+		ITextComponent title = new TextComponentTranslation("gui.jade.by",
+				new TextComponentString("❤").setStyle(new Style().setColor(TextFormatting.RED))).setStyle(style);
+		ITextComponent hoveredTitle = new TextComponentTranslation("gui.jade.by.hovered").setStyle(style);
+		int btnWidth = mc.fontRenderer.getStringWidth(title.getFormattedText());
 		int btnX = (int) (width * 0.5F - btnWidth * 0.5F);
 		int btnY = (int) (height * 0.9F - 5);
-		Component narration = Component.translatable(festival == 99 ? "narration.jade.by.lunar" : "narration.jade.by");
-		CreditButton creditButton = addRenderableWidget(new CreditButton(
+		CreditButton creditButton = new CreditButton(
 				btnX,
 				btnY,
 				btnWidth,
 				10,
 				title,
 				hoveredTitle,
-				b -> ConfirmLinkScreen.confirmLinkNow(this, "https://www.curseforge.com/members/snownee_/projects"),
-				this::triggerAuthorButton,
-				$ -> narration.copy()));
+				b -> mc.displayGuiScreen(new GuiConfirmOpenLink(
+						new GuiYesNoCallbackImpl("https://www.curseforge.com/members/snownee_/projects"),
+						"https://www.curseforge.com/members/snownee_/projects",
+						13,
+						false)),
+				this::triggerAuthorButton);
+		buttonList.add(creditButton);
 		if (showTranslators) {
 			creditButton.showTranslators();
+		}
+	}
+
+	/** 1.12.2: GuiConfirmOpenLink hands the result back to the parent screen's confirmClicked. */
+	private class GuiYesNoCallbackImpl implements GuiYesNoCallback {
+		private final String link;
+
+		GuiYesNoCallbackImpl(String link) {
+			this.link = link;
+		}
+
+		@Override
+		public void confirmClicked(boolean result, int id) {
+			// 1.12.2: GuiConfirmOpenLink keeps the confirm screen on screen after the callback;
+			// return to the settings screen explicitly (the modern ConfirmLinkScreen pops back to
+			// its parent after opening/copying).
+			if (id == 13) {
+				if (result) {
+					openWebLink(link);
+				}
+				mc.displayGuiScreen(HomeConfigScreen.this);
+			}
+		}
+	}
+
+	/** 1.12.2: GuiScreen.openWebLink is private, so the URI is opened through the OS desktop. */
+	private void openWebLink(String link) {
+		try {
+			java.awt.Desktop.getDesktop().browse(java.net.URI.create(link));
+		} catch (Exception e) {
+			Jade.LOGGER.error("Failed to open link %s".formatted(link), e);
 		}
 	}
 
@@ -178,7 +219,7 @@ public class HomeConfigScreen extends Screen {
 		showTranslators = true;
 	}
 
-	private void triggerAuthorButton(Button button) {
+	private void triggerAuthorButton(CreditButton button) {
 		if (festival == 2 || festival == 3) {
 			festival = 3;
 			return;
@@ -192,13 +233,13 @@ public class HomeConfigScreen extends Screen {
 			text = "✐";
 		} else {
 			for (int i = 0; i < 11; i++) {
-				colors.add(ARGB.colorFromFloat(1, 1 - random.nextFloat() * 0.6F, 1, 1));
+				colors.add(colorFromFloat(1, 1 - random.nextFloat() * 0.6F, 1, 1));
 			}
 		}
 		for (int color : colors) {
-			int ox = random.nextIntBetweenInclusive(-button.getWidth() / 2, button.getWidth() / 2);
+			int ox = nextIntBetweenInclusive(-button.width / 2, button.width / 2);
 			float x = width * 0.5F + ox;
-			float y = random.nextIntBetweenInclusive(button.getY(), button.getY() + button.getHeight());
+			float y = nextIntBetweenInclusive(button.y, button.y + button.height);
 			float dx = ox * 0.08F;
 			float dy = -5 - random.nextFloat() * 3;
 			var particle = new TextParticle(text, x, y, dx, dy, color, 0.75F + random.nextFloat() * 0.5F);
@@ -209,18 +250,41 @@ public class HomeConfigScreen extends Screen {
 		}
 	}
 
+	private int nextIntBetweenInclusive(int min, int max) {
+		return min + random.nextInt(max - min + 1);
+	}
+
+	/** {@code ARGB.colorFromFloat} replacement. */
+	private static int colorFromFloat(float a, float r, float g, float b) {
+		return ((int) (a * 255) << 24) | ((int) (r * 255) << 16) | ((int) (g * 255) << 8) | (int) (b * 255);
+	}
+
+	/**
+	 * 1.12.2: onGuiClosed fires on every screen switch, so it must not save here (the done
+	 * button's onClose saves, then displayGuiScreen(parent) fires this again); the cancel/ESC
+	 * path is onClose only. Mirrors BaseOptionsScreen.
+	 */
 	@Override
+	public void onGuiClosed() {
+	}
+
+	/**
+	 * 1.12.2: no onClose() in GuiScreen; the done button calls this directly (mirrors the modern onClose flow:
+	 * save, reload ignore lists, return to the parent screen).
+	 */
 	public void onClose() {
+		Objects.requireNonNull(mc);
 		IWailaConfig.get().save();
 		WailaClientRegistration.instance().reloadIgnoreLists();
-		Objects.requireNonNull(minecraft).gui.setScreen(parent);
+		if (parent != null) {
+			mc.displayGuiScreen(parent);
+		}
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-		Objects.requireNonNull(minecraft);
-		float deltaTicks = Minecraft.getInstance().getDeltaTracker().getRealtimeDeltaTicks();
-		ticks += deltaTicks;
+	public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+		Objects.requireNonNull(mc);
+		ticks += partialTicks;
 		particle:
 		if (ticks > nextParticleIn) {
 			if (festival == 3) {
@@ -228,12 +292,12 @@ public class HomeConfigScreen extends Screen {
 				if (pendingParticles.isEmpty()) {
 					festival3populateNew();
 				}
-				if (Mth.abs(mouseX - lastMouseX) < 3 && Mth.abs(mouseY - lastMouseY) < 3) {
+				if (Math.abs(mouseX - lastMouseX) < 3 && Math.abs(mouseY - lastMouseY) < 3) {
 					break particle;
 				}
 				lastMouseX = mouseX;
 				lastMouseY = mouseY;
-				TextParticle particle = pendingParticles.removeFirst();
+				TextParticle particle = pendingParticles.remove(0);
 				particle.x = mouseX;
 				particle.y = mouseY;
 				particle.gravity = 0F;
@@ -241,55 +305,55 @@ public class HomeConfigScreen extends Screen {
 				particles.add(particle);
 				persistentParticles.add(particle);
 				if (persistentParticles.size() > 50) {
-					TextParticle first = persistentParticles.removeFirst();
+					TextParticle first = persistentParticles.remove(0);
 					first.persistent = false;
 				}
 			} else if (festival == 1) {
 				nextParticleIn = ticks + 10 + random.nextFloat() * 10;
-				int color = ARGB.colorFromFloat(1, 1 - random.nextFloat() * 0.6F, 1, 1);
+				int color = colorFromFloat(1, 1 - random.nextFloat() * 0.6F, 1, 1);
 				color |= (random.nextInt(80) + 40) << 24;
-				int x = random.nextIntBetweenInclusive(40, width + 100);
+				int x = nextIntBetweenInclusive(40, width + 100);
 				var particle = new TextParticle("❄", x, -20, -0.3F, 0.5f, color, 2F + random.nextFloat());
 				particle.gravity = 0F;
 				particles.add(particle);
 			}
 		}
-		super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+		super.drawScreen(mouseX, mouseY, partialTicks);
 		int left = width / 2 - 105;
 		int top = height / 4 - 20;
-		graphics.pose().pushMatrix();
-		graphics.pose().translate(left, top);
+		GlStateManager.pushMatrix();
+		GlStateManager.translate(left, top, 0);
 
 		float scale = 2F;
-		graphics.pose().scale(scale);
-		graphics.text(font, ModIdentification.getModFullName(Jade.ID).orElse("Jade"), 0, 0, 0xFFFFFFFF);
+		GlStateManager.scale(scale, scale, 1);
+		mc.fontRenderer.drawString(ModIdentification.getModFullName(Jade.ID).orElse("Jade"), 0, 0, 0xFFFFFFFF);
 
-		graphics.pose().scale(0.5F);
-		titleY.tick(deltaTicks);
-		String desc2 = I18n.get("gui.jade.configuration.desc2");
+		GlStateManager.scale(0.5F, 0.5F, 1);
+		titleY.tick(partialTicks);
+		String desc2 = I18n.format("gui.jade.configuration.desc2");
 		float scaledX, scaledY;
 		if (desc2.isEmpty()) {
-			graphics.pose().popMatrix();
-			graphics.pose().pushMatrix();
-			graphics.pose().translate(left, top);
+			GlStateManager.popMatrix();
+			GlStateManager.pushMatrix();
+			GlStateManager.translate(left, top, 0);
 			scaledX = mouseX - left;
 			scaledY = mouseY - top;
 		} else {
 			scaledX = (mouseX - left) / scale * 2;
 			scaledY = (mouseY - top) / scale * 2;
 		}
-		drawFancyTitle(graphics, I18n.get("gui.jade.configuration.desc1"), Math.min(titleY.value, 20F), 20F, scaledX, scaledY);
+		drawFancyTitle(I18n.format("gui.jade.configuration.desc1"), Math.min(titleY.value, 20F), 20F, scaledX, scaledY);
 		if (!desc2.isEmpty()) {
-			drawFancyTitle(graphics, desc2, Math.min(titleY.value + 3F, 32F), 32F, scaledX, scaledY);
+			drawFancyTitle(desc2, Math.min(titleY.value + 3F, 32F), 32F, scaledX, scaledY);
 		}
-		graphics.pose().popMatrix();
+		GlStateManager.popMatrix();
 
 		particles.removeIf(p -> {
-			p.tick(deltaTicks);
+			p.tick(partialTicks);
 			if (p.y > height + 20) {
 				return true;
 			}
-			p.render(graphics, font, mouseX, mouseY);
+			p.render(mouseX, mouseY);
 			return false;
 		});
 	}
@@ -347,19 +411,21 @@ public class HomeConfigScreen extends Screen {
 				colors.add(0x9C59D1);
 				colors.add(0x2C2C2C);
 			}
+			default -> {
+			}
 		}
 		for (int color : colors) {
 			for (int i = 0; i < 5; i++) {
-				float rot = random.nextFloat() * Mth.TWO_PI;
-				float dx = Mth.cos(rot) * 2;
-				float dy = Mth.sin(rot) * 2;
+				float rot = random.nextFloat() * (float) (Math.PI * 2);
+				float dx = MathHelper.cos(rot) * 2;
+				float dy = MathHelper.sin(rot) * 2;
 				var particle = new TextParticle(text, 0, 0, dx, dy, color | 0xFF000000, 1);
 				pendingParticles.add(particle);
 			}
 		}
 	}
 
-	private void drawFancyTitle(GuiGraphicsExtractor guiGraphics, String text, float y, float expectY, float mouseX, float mouseY) {
+	private void drawFancyTitle(String text, float y, float expectY, float mouseX, float mouseY) {
 		float distY = Math.abs(y - expectY);
 		if (distY >= 9) {
 			return;
@@ -368,31 +434,34 @@ public class HomeConfigScreen extends Screen {
 		float glint1 = (ticks - y / 5F) % 90 / 45 * width;
 		float glint2 = mouseX;
 		float glint1Strength = 1;
-		float glint2Strength = 1 - Mth.clamp(Math.abs(mouseY - y) / 20F, 0, 1);
+		float glint2Strength = 1 - MathHelper.clamp(Math.abs(mouseY - y) / 20F, 0, 1);
 
-		MutableComponent component = Component.empty();
-		MutableInt curX = new MutableInt();
-		StringDecomposer.iterateFormatted(
-				text, Style.EMPTY, (index, style, codePoint) -> {
-					String s = Character.toString(codePoint);
-					int width = font.width(s);
-					int curXVal = curX.intValue();
-					curX.add(width);
-					curXVal += width / 2;
-					float dist = Math.abs(curXVal - glint1);
-					float localGlint1 = 0.65F + Mth.clamp(1 - dist / 20, 0, 1) * 0.35F * glint1Strength;
-					dist = Math.abs(curXVal - glint2);
-					float localGlint2 = 0.65F + Mth.clamp(1 - dist / 20, 0, 1) * 0.35F * glint2Strength;
-					float colorMul = Math.max(localGlint1, localGlint2);
-					int originalColor = style.getColor() == null ? 0xAAAAAA : style.getColor().getValue();
-					component.append(Component.literal(s).withStyle(style).withColor(ARGB.scaleRGB(originalColor, colorMul)));
-					return true;
-				});
-
-		guiGraphics.pose().pushMatrix();
-		guiGraphics.pose().translate(0, y);
-		guiGraphics.text(font, component, 0, 0, color);
-		guiGraphics.pose().popMatrix();
+		// 1.12.2: no §x hex-color format codes (the FontRenderer format-code parser clamps
+		// 'x' to -1), so the per-glyph glint color is applied by drawing each glyph
+		// separately instead of baking §x codes into a single string.
+		int x = 0;
+		GlStateManager.pushMatrix();
+		GlStateManager.translate(0, y, 0);
+		for (int i = 0; i < text.length(); ) {
+			int codePoint = text.codePointAt(i);
+			i += Character.charCount(codePoint);
+			String s = new String(Character.toChars(codePoint));
+			int glyphWidth = mc.fontRenderer.getStringWidth(s);
+			x += glyphWidth;
+			int curXVal = x + glyphWidth / 2;
+			float dist = Math.abs(curXVal - glint1);
+			float localGlint1 = 0.65F + MathHelper.clamp(1 - dist / 20, 0, 1) * 0.35F * glint1Strength;
+			dist = Math.abs(curXVal - glint2);
+			float localGlint2 = 0.65F + MathHelper.clamp(1 - dist / 20, 0, 1) * 0.35F * glint2Strength;
+			float colorMul = Math.max(localGlint1, localGlint2);
+			int originalColor = 0xAAAAAA;
+			float colorMulClamped = Math.max(0, Math.min(1, colorMul));
+			int r = (int) (((originalColor >> 16) & 0xFF) * colorMulClamped);
+			int g = (int) (((originalColor >> 8) & 0xFF) * colorMulClamped);
+			int b = (int) ((originalColor & 0xFF) * colorMulClamped);
+			mc.fontRenderer.drawString(s, x - glyphWidth, 0, (color & 0xFF000000) | (r << 16) | (g << 8) | b);
+		}
+		GlStateManager.popMatrix();
 	}
 
 	private class TextParticle {
@@ -435,11 +504,11 @@ public class HomeConfigScreen extends Screen {
 				if (greaterThanZero && age <= 0) {
 					text = random.nextBoolean() ? "✴" : "✳";
 					color = random.nextBoolean() ? 0xFFD427 : 0xF0C415;
-					Objects.requireNonNull(minecraft);
-					minecraft.getSoundManager().play(SimpleSoundInstance.forUI(
+					Objects.requireNonNull(mc);
+					mc.getSoundHandler().playSound(PositionedSoundRecord.getMasterRecord(
 							random.nextBoolean() ?
-									SoundEvents.FIREWORK_ROCKET_BLAST :
-									SoundEvents.FIREWORK_ROCKET_LARGE_BLAST, 0.7F));
+									SoundEvents.ENTITY_FIREWORK_BLAST :
+									SoundEvents.ENTITY_FIREWORK_LARGE_BLAST, 0.7F));
 				}
 			}
 			if (!persistent) {
@@ -447,23 +516,23 @@ public class HomeConfigScreen extends Screen {
 			}
 		}
 
-		private void render(GuiGraphicsExtractor graphics, Font font, int mouseX, int mouseY) {
+		private void render(int mouseX, int mouseY) {
 			if (festival == 99 && age < -4) {
 				return;
 			}
-			graphics.pose().pushMatrix();
-			graphics.pose().translate(x, y);
-			graphics.pose().scale(scale);
+			GlStateManager.pushMatrix();
+			GlStateManager.translate(x, y, 0);
+			GlStateManager.scale(scale, scale, 1);
 			int color = this.color;
 			if (festival == 1) {
-				graphics.pose().rotate(age / 50);
-				float alpha = Mth.clamp((Math.abs(mouseX - x) + Math.abs(mouseY - y)) / 50F, 0.25F, 1);
+				GlStateManager.rotate(age / 50, 0, 0, 1);
+				float alpha = MathHelper.clamp((Math.abs(mouseX - x) + Math.abs(mouseY - y)) / 50F, 0.25F, 1);
 				color = IWailaConfig.Overlay.applyAlpha(color, alpha);
 			} else if (fade != 1) {
 				color = IWailaConfig.Overlay.applyAlpha(color, fade);
 			}
-			graphics.text(font, text, 0, 0, color);
-			graphics.pose().popMatrix();
+			mc.fontRenderer.drawString(text, 0, 0, color);
+			GlStateManager.popMatrix();
 		}
 	}
 

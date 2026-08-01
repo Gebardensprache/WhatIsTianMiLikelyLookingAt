@@ -5,8 +5,8 @@ import java.util.function.Function;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.world.Container;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.item.ItemStack;
 import snownee.jade.api.Accessor;
 import snownee.jade.util.CommonProxy;
 
@@ -22,7 +22,7 @@ public interface ItemViewUtils {
 	 * @return grouped views, or {@code null}
 	 */
 	@Nullable
-	static List<ViewGroup<ItemStack>> groupOf(Container container, Accessor<?> accessor) {
+	static List<ViewGroup<ItemStack>> groupOf(IInventory container, Accessor<?> accessor) {
 		return CommonProxy.containerGroup(container, accessor);
 	}
 
@@ -35,7 +35,7 @@ public interface ItemViewUtils {
 	 * @return grouped views, or {@code null}
 	 */
 	@Nullable
-	static List<ViewGroup<ItemStack>> groupOf(Container container, Accessor<?> accessor, Function<Accessor<?>, Container> containerFinder) {
+	static List<ViewGroup<ItemStack>> groupOf(IInventory container, Accessor<?> accessor, Function<Accessor<?>, IInventory> containerFinder) {
 		return CommonProxy.containerGroup(container, accessor, containerFinder);
 	}
 

@@ -1,54 +1,58 @@
 package snownee.jade.addon.harvest;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 
-import net.minecraft.core.Holder;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.storage.loot.LootPool;
-import net.minecraft.world.level.storage.loot.LootTable;
-import net.minecraft.world.level.storage.loot.entries.AlternativesEntry;
-import net.minecraft.world.level.storage.loot.entries.LootPoolEntryContainer;
-import net.minecraft.world.level.storage.loot.entries.NestedLootTable;
+import net.minecraft.block.Block;
+import net.minecraft.init.Blocks;
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.World;
+import net.minecraft.world.storage.loot.LootEntry;
+import net.minecraft.world.storage.loot.LootEntryItem;
+import net.minecraft.world.storage.loot.LootEntryTable;
+import net.minecraft.world.storage.loot.LootPool;
+import net.minecraft.world.storage.loot.LootTable;
+import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import snownee.jade.Jade;
 import snownee.jade.util.CommonProxy;
 
 public class LootTableMineableCollector {
-	private static List<Block> shearableBlocks = List.of();
-	private final HolderLookup.RegistryLookup<LootTable> lootRegistry;
+	private static List<Block> shearableBlocks = Collections.emptyList();
+	private final World world;
 	private final ItemStack toolItem;
 
-	public LootTableMineableCollector(HolderLookup.RegistryLookup<LootTable> lootRegistry, ItemStack toolItem) {
-		this.lootRegistry = lootRegistry;
+	public LootTableMineableCollector(World world, ItemStack toolItem) {
+		this.world = world;
 		this.toolItem = toolItem;
 	}
 
-	public static List<Block> execute(HolderLookup.RegistryLookup<LootTable> lootRegistry, ItemStack toolItem) {
+	public static List<Block> execute(World world, ItemStack toolItem) {
 		Stopwatch stopwatch = null;
 		if (CommonProxy.isDevEnv()) {
 			stopwatch = Stopwatch.createStarted();
 		}
-		LootTableMineableCollector collector = new LootTableMineableCollector(lootRegistry, toolItem);
+		LootTableMineableCollector collector = new LootTableMineableCollector(world, toolItem);
 		ImmutableList.Builder<Block> list = ImmutableList.builder();
-		for (Block block : BuiltInRegistries.BLOCK) {
-			if (block.getLootTable().isEmpty()) {
+		// 1.12.2: blocks do not retain a direct loot-table id; use their registry id as the
+		// conventional blocks/<path> table key and let absent tables resolve to EMPTY_LOOT_TABLE.
+		for (Block block : ForgeRegistries.BLOCKS) {
+			ResourceLocation blockId = block.getRegistryName();
+			if (blockId == null) {
 				continue;
 			}
-			LootTable lootTable = lootRegistry.get(block.getLootTable().get()).map(Holder::value).orElse(null);
+			ResourceLocation lootId = new ResourceLocation(blockId.getNamespace(), "blocks/" + blockId.getPath());
+			LootTable lootTable = world.getLootTableManager().getLootTableFromLocation(lootId);
 			if (collector.doLootTable(lootTable)) {
 				list.add(block);
-//				Jade.LOGGER.info("block: {}", BuiltInRegistries.BLOCK.getKey(block));
 			}
 		}
 		if (stopwatch != null) {
@@ -59,7 +63,7 @@ public class LootTableMineableCollector {
 	}
 
 	private boolean doLootTable(@Nullable LootTable lootTable) {
-		if (lootTable == null || lootTable == LootTable.EMPTY) {
+		if (lootTable == null || lootTable == LootTable.EMPTY_LOOT_TABLE) {
 			return false;
 		}
 		for (LootPool pool : lootTable.pools) {
@@ -71,7 +75,7 @@ public class LootTableMineableCollector {
 	}
 
 	private boolean doLootPool(LootPool lootPool) {
-		for (LootPoolEntryContainer entry : lootPool.entries) {
+		for (LootEntry entry : lootPool.lootEntries) {
 			if (doLootPoolEntry(entry)) {
 				return true;
 			}
@@ -79,32 +83,32 @@ public class LootTableMineableCollector {
 		return false;
 	}
 
-	private boolean doLootPoolEntry(LootPoolEntryContainer entry) {
-		if (entry instanceof AlternativesEntry alternativesEntry) {
-			for (LootPoolEntryContainer child : alternativesEntry.children) {
-				if (doLootPoolEntry(child)) {
-					return true;
-				}
-			}
-		} else if (entry instanceof NestedLootTable nestedLootTable) {
-			Optional<LootTable> lootTable = nestedLootTable.contents.map(
-					$ -> lootRegistry.get($).map(Holder::value),
-					Optional::of);
-			return doLootTable(lootTable.orElse(null));
-		} else {
-			return CommonProxy.isCorrectConditions(entry.conditions, toolItem);
+	private boolean doLootPoolEntry(LootEntry entry) {
+		if (entry instanceof LootEntryTable tableEntry) {
+			return CommonProxy.isCorrectConditions(Arrays.asList(tableEntry.conditions), toolItem) &&
+					doLootTable(world.getLootTableManager().getLootTableFromLocation(tableEntry.table));
 		}
+		if (entry instanceof LootEntryItem) {
+			return CommonProxy.isCorrectConditions(Arrays.asList(entry.conditions), toolItem);
+		}
+		// Only actual item entries, directly or through a qualifying table reference, are evidence of a drop.
 		return false;
 	}
 
-	public static void onTagsUpdated(HolderLookup.Provider lookupProvider) {
-		//TODO execute on a thread?
+	public static void onTagsUpdated(@Nullable MinecraftServer server) {
+		onTagsUpdated(server, false);
+	}
+
+	public static void onTagsUpdated(@Nullable MinecraftServer server, boolean client) {
+		// 1.12.2: tag reload has no modern registry lookup. The server's overworld owns the loot manager.
+		if (server == null) {
+			return;
+		}
 		try {
-			shearableBlocks = LootTableMineableCollector.execute(
-					lookupProvider.lookupOrThrow(Registries.LOOT_TABLE),
-					Items.SHEARS.getDefaultInstance());
+			shearableBlocks = LootTableMineableCollector.execute(server.getWorld(0), new ItemStack(Items.SHEARS));
 		} catch (Throwable e) {
 			Jade.LOGGER.error("Failed to collect shearable blocks", e);
+			shearableBlocks = Collections.emptyList();
 		}
 	}
 

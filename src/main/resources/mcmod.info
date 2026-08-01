@@ -1,0 +1,18 @@
+[
+  {
+    "modid": "${mod_id}",
+    "name": "${mod_name}",
+    "version": "${mod_version}",
+    "mcversion": "${mc_version}",
+    "description": "Minecraft mod shows what you are looking at. (Hwyla fork)",
+    "authorList": [
+      "Snownee"
+    ],
+    "credits": "TehNut, ProfMobius, kalkafox",
+    "url": "https://www.curseforge.com/minecraft/mc-mods/jade",
+    "dependencies": [
+      "mixinbooter"
+    ],
+    "logoFile": "icon.png"
+  }
+]

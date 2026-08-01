@@ -10,14 +10,19 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
-import net.minecraft.client.gui.layouts.AbstractLayout;
-import net.minecraft.client.gui.layouts.LayoutElement;
-import net.minecraft.client.gui.layouts.LayoutSettings;
-import net.minecraft.util.Util;
 import snownee.jade.api.ui.Element;
+import snownee.jade.api.ui.Layout;
+import snownee.jade.api.ui.LayoutElement;
 import snownee.jade.api.ui.Orientation;
 
-public class JadeLinearLayout extends AbstractLayout implements ResizeableLayout {
+/**
+ * 1.12.2: no longer extends {@code net.minecraft.client.gui.layouts.AbstractLayout}, which does not exist before
+ * 1.20. {@code x}/{@code y}/{@code width}/{@code height} are tracked directly instead of inherited, and
+ * {@code ChildContainer} is a plain wrapper (see below) instead of an {@code AbstractLayout.AbstractChildWrapper}.
+ * Declares {@code implements Layout} explicitly (vanilla gets this via {@code AbstractLayout}) because callers such
+ * as {@code LayoutWithPadding} and {@code JadeUIInternal}'s recursive visitor rely on {@code instanceof Layout}.
+ */
+public class JadeLinearLayout implements Layout, ResizeableLayout {
 	private Orientation orientation;
 	private Align alignItems = Align.START;
 	private final List<ChildContainer> children = Lists.newArrayList();
@@ -28,9 +33,12 @@ public class JadeLinearLayout extends AbstractLayout implements ResizeableLayout
 	private int minHeight;
 	private int flexGrow;
 	private boolean arranged;
+	private int x;
+	private int y;
+	private int width;
+	private int height;
 
 	public JadeLinearLayout(Orientation orientation) {
-		super(0, 0, 0, 0);
 		this.orientation = orientation;
 	}
 
@@ -81,7 +89,9 @@ public class JadeLinearLayout extends AbstractLayout implements ResizeableLayout
 	}
 
 	public <T extends LayoutElement> T addChild(T element, Consumer<LayoutSettings> consumer) {
-		return addChild(element, Util.make(newChildLayoutSettings(element), consumer));
+		LayoutSettings settings = newChildLayoutSettings(element);
+		consumer.accept(settings);
+		return addChild(element, settings);
 	}
 
 	public <T extends LayoutElement> T addChild(T element, LayoutSettings layoutSettings) {
@@ -116,16 +126,16 @@ public class JadeLinearLayout extends AbstractLayout implements ResizeableLayout
 			arranged = true;
 			return;
 		}
-		super.arrangeElements();
 		int axis = 0;
 		int crossAxis = 0;
 		int sumGrow = 0;
 		int[] margins = null;
 		if (size == 1) {
-			ChildContainer child = children.getFirst();
+			ChildContainer child = children.get(0);
 			axis = orientation.getAxisLength(child);
 			crossAxis = orientation.getCrossAxisLength(child);
 			sumGrow = child.flexGrow;
+			arranged = true;
 		} else {
 			margins = new int[size - 1];
 			ChildContainer lastChild = null;
@@ -185,12 +195,15 @@ public class JadeLinearLayout extends AbstractLayout implements ResizeableLayout
 			return;
 		}
 
-		List<ChildContainer> children = this.children.stream()
-				.filter(it -> it.flexGrow > 0)
-				.toList();
+		List<ChildContainer> children = Lists.newArrayList();
+		for (ChildContainer child : this.children) {
+			if (child.flexGrow > 0) {
+				children.add(child);
+			}
+		}
 		int size = children.size();
 		if (size == 1) {
-			ChildContainer child = children.getFirst();
+			ChildContainer child = children.get(0);
 			orientation.setFreeSpace(child, orientation.getAxisLength(child) + extraAxisSpace, crossAxis);
 			return;
 		}
@@ -282,7 +295,7 @@ public class JadeLinearLayout extends AbstractLayout implements ResizeableLayout
 	public LayoutSettings newChildLayoutSettings(LayoutElement layoutElement) {
 		LayoutSettings settings = newChildLayoutSettings();
 		if (layoutElement instanceof Element element && element.getSettings() != null) {
-			settings = element.getSettings().apply(settings);
+			settings = (LayoutSettings) element.getSettings().apply(settings);
 		}
 		return settings;
 	}
@@ -292,7 +305,7 @@ public class JadeLinearLayout extends AbstractLayout implements ResizeableLayout
 		if (!arranged) {
 			arrangeElements();
 		}
-		return super.getHeight();
+		return height;
 	}
 
 	@Override
@@ -300,17 +313,103 @@ public class JadeLinearLayout extends AbstractLayout implements ResizeableLayout
 		if (!arranged) {
 			arrangeElements();
 		}
-		return super.getWidth();
+		return width;
 	}
 
-	public static class ChildContainer extends AbstractLayout.AbstractChildWrapper {
+	@Override
+	public int getX() {
+		return x;
+	}
+
+	@Override
+	public int getY() {
+		return y;
+	}
+
+	/**
+	 * 1.12.2: reproduces modern {@code AbstractLayout.setX}/{@code setY}, which propagate the position
+	 * delta to every child ({@code child.setX(child.getX() + x - this.getX())}). Without this, a parent
+	 * layout positions its child layouts at their cumulative offsets, but the child layouts never move
+	 * their own children, so all grandchildren stay parked at their local origin and overlap.
+	 */
+	@Override
+	public void setX(int x) {
+		int delta = x - this.x;
+		if (delta != 0) {
+			for (ChildContainer container : children) {
+				container.child.setX(container.child.getX() + delta);
+			}
+		}
+		this.x = x;
+	}
+
+	@Override
+	public void setY(int y) {
+		int delta = y - this.y;
+		if (delta != 0) {
+			for (ChildContainer container : children) {
+				container.child.setY(container.child.getY() + delta);
+			}
+		}
+		this.y = y;
+	}
+
+	/**
+	 * 1.12.2: plain wrapper holding a child plus its {@link LayoutSettings}, replacing
+	 * {@code net.minecraft.client.gui.layouts.AbstractLayout.AbstractChildWrapper} (which does not exist before
+	 * 1.20). {@code getWidth()}/{@code getHeight()} report the child's size plus padding; {@code setX}/{@code setY}
+	 * position the child inside that padded box. Vanilla's fractional x/y-alignment is not reproduced -- see
+	 * {@link LayoutSettings}.
+	 */
+	public static class ChildContainer implements LayoutElement {
+		public final LayoutElement child;
+		public final LayoutSettings settings;
 		public int headMargin;
 		public int tailMargin;
 		public int flexGrow;
 		public @Nullable Align alignSelf;
 
-		protected ChildContainer(LayoutElement element, LayoutSettings settings) {
-			super(element, settings);
+		protected ChildContainer(LayoutElement child, LayoutSettings settings) {
+			this.child = child;
+			this.settings = settings;
+		}
+
+		@Override
+		public int getWidth() {
+			return child.getWidth() + settings.getPaddingLeft() + settings.getPaddingRight();
+		}
+
+		@Override
+		public int getHeight() {
+			return child.getHeight() + settings.getPaddingTop() + settings.getPaddingBottom();
+		}
+
+		@Override
+		public int getX() {
+			return child.getX() - settings.getPaddingLeft();
+		}
+
+		@Override
+		public int getY() {
+			return child.getY() - settings.getPaddingTop();
+		}
+
+		@Override
+		public void setX(int x) {
+			setX(x, getWidth());
+		}
+
+		@Override
+		public void setY(int y) {
+			setY(y, getHeight());
+		}
+
+		public void setX(int x, int width) {
+			child.setX(x + settings.getPaddingLeft());
+		}
+
+		public void setY(int y, int height) {
+			child.setY(y + settings.getPaddingTop());
 		}
 	}
 

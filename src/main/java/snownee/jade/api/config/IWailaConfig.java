@@ -2,11 +2,10 @@ package snownee.jade.api.config;
 
 import org.jetbrains.annotations.ApiStatus.NonExtendable;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.ARGB;
-import net.minecraft.world.level.ClipContext;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.JadeInternals;
 import snownee.jade.api.SimpleStringRepresentable;
 import snownee.jade.api.theme.Theme;
@@ -110,15 +109,9 @@ public interface IWailaConfig {
 	 * Controls which fluid clipping mode Jade uses.
 	 */
 	enum FluidMode implements SimpleStringRepresentable {
-		NONE(ClipContext.Fluid.NONE),
-		ANY(ClipContext.Fluid.ANY),
-		FALLBACK(ClipContext.Fluid.NONE);
-
-		public final ClipContext.Fluid ctx;
-
-		FluidMode(ClipContext.Fluid ctx) {
-			this.ctx = ctx;
-		}
+		NONE,
+		ANY,
+		FALLBACK;
 	}
 
 	/**
@@ -216,11 +209,12 @@ public interface IWailaConfig {
 			if (alpha == 0) {
 				return 0;
 			}
-			int prevAlpha = ARGB.alpha(color);
+			int prevAlpha = (color >> 24) & 0xFF;
 			if (prevAlpha != 255) {
 				alpha *= prevAlpha / 255F;
 			}
-			return ARGB.color(ARGB.as8BitChannel(alpha), color);
+			int newAlpha = MathHelper.clamp((int) (alpha * 255), 0, 255);
+			return (newAlpha << 24) | (color & 0xFFFFFF);
 		}
 
 		float getOverlayPosX();
@@ -251,7 +245,7 @@ public interface IWailaConfig {
 
 		Theme getTheme();
 
-		void applyTheme(Identifier id);
+		void applyTheme(ResourceLocation id);
 
 		boolean shouldShowIcon();
 
@@ -275,7 +269,7 @@ public interface IWailaConfig {
 
 		void setItemModNameStyle(Style itemModNameStyle);
 
-		Component registryName(String name);
+		ITextComponent registryName(String name);
 	}
 
 	@NonExtendable

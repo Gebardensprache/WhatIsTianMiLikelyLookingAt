@@ -2,13 +2,12 @@ package snownee.jade.addon.vanilla;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.entity.CommandBlockEntity;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.tileentity.TileEntityCommandBlock;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextComponentString;
 import snownee.jade.api.BlockAccessor;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.JadeIds;
@@ -21,10 +20,10 @@ public class CommandBlockProvider implements StreamServerDataProvider<BlockAcces
 	@Override
 	@Nullable
 	public String streamData(BlockAccessor accessor) {
-		if (!accessor.getPlayer().canUseGameMasterBlocks()) {
+		if (!accessor.getPlayer().canUseCommandBlock()) {
 			return null;
 		}
-		String command = accessor.<CommandBlockEntity>typedBlockEntity().getCommandBlock().getCommand();
+		String command = accessor.<TileEntityCommandBlock>typedBlockEntity().getCommandBlockLogic().getCommand();
 		if (command.length() > 40) {
 			command = command.substring(0, 37) + "...";
 		}
@@ -32,17 +31,27 @@ public class CommandBlockProvider implements StreamServerDataProvider<BlockAcces
 	}
 
 	@Override
-	public StreamCodec<RegistryFriendlyByteBuf, String> streamCodec() {
-		return ByteBufCodecs.STRING_UTF8.cast();
+	public DataCodec<String> streamCodec() {
+		return new DataCodec<>() {
+			@Override
+			public String decode(PacketBuffer buf) {
+				return buf.readString(32767);
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, String value) {
+				buf.writeString(value);
+			}
+		};
 	}
 
 	@Override
 	public boolean shouldRequestData(BlockAccessor accessor) {
-		return accessor.getPlayer().canUseGameMasterBlocks();
+		return accessor.getPlayer().canUseCommandBlock();
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_COMMAND_BLOCK;
 	}
 
@@ -52,14 +61,14 @@ public class CommandBlockProvider implements StreamServerDataProvider<BlockAcces
 		@Override
 		public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
 			String command = CommandBlockProvider.INSTANCE.decodeFromData(accessor).orElse("");
-			if (command.isBlank()) {
+			if (command.trim().isEmpty()) {
 				return;
 			}
-			tooltip.add(Component.literal("> " + command));
+			tooltip.add(new TextComponentString("> " + command));
 		}
 
 		@Override
-		public Identifier getUid() {
+		public ResourceLocation getUid() {
 			return JadeIds.MC_COMMAND_BLOCK;
 		}
 	}

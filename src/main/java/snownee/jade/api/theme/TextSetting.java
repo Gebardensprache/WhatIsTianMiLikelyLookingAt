@@ -2,7 +2,7 @@ package snownee.jade.api.theme;
 
 import java.util.Optional;
 
-import net.minecraft.network.chat.Style;
+import net.minecraft.util.text.Style;
 import snownee.jade.api.ui.ColorPalette;
 
 /**
@@ -13,6 +13,6 @@ public record TextSetting(ColorPalette colors, boolean shadow, Style modNameStyl
 
 	@SuppressWarnings("OptionalUsedAsFieldOrParameterType")
 	public TextSetting(ColorPalette colors, boolean shadow, Optional<Style> modNameStyle, int itemAmountColor) {
-		this(colors, shadow, modNameStyle.orElse(Style.EMPTY), itemAmountColor);
+		this(colors, shadow, modNameStyle.orElse(new Style()), itemAmountColor);
 	}
 }

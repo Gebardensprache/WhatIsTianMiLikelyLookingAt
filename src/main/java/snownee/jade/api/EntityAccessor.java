@@ -5,16 +5,16 @@ import java.util.function.Supplier;
 import org.jetbrains.annotations.ApiStatus.NonExtendable;
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.world.World;
+import net.minecraft.util.math.RayTraceResult;
 
 /**
  * Accessor describing the entity currently under the Jade crosshair.
  */
-public interface EntityAccessor extends Accessor<EntityHitResult> {
+public interface EntityAccessor extends Accessor<RayTraceResult> {
 
 	/**
 	 * Returns the resolved entity.
@@ -37,11 +37,11 @@ public interface EntityAccessor extends Accessor<EntityHitResult> {
 
 	@NonExtendable
 	interface Builder {
-		Builder level(Level level);
+		Builder level(World level);
 
-		Builder player(Player player);
+		Builder player(EntityPlayer player);
 
-		Builder serverData(@Nullable CompoundTag serverData);
+		Builder serverData(@Nullable NBTTagCompound serverData);
 
 		Builder serverConnected(boolean connected);
 
@@ -53,7 +53,7 @@ public interface EntityAccessor extends Accessor<EntityHitResult> {
 		 * @param hit supplier for the entity hit result
 		 * @return this builder
 		 */
-		default Builder hit(EntityHitResult hit) {
+		default Builder hit(RayTraceResult hit) {
 			return hit(() -> hit);
 		}
 
@@ -63,7 +63,7 @@ public interface EntityAccessor extends Accessor<EntityHitResult> {
 		 * @param hit supplier for the entity hit result
 		 * @return this builder
 		 */
-		Builder hit(Supplier<EntityHitResult> hit);
+		Builder hit(Supplier<RayTraceResult> hit);
 
 		/**
 		 * Sets the entity supplier.

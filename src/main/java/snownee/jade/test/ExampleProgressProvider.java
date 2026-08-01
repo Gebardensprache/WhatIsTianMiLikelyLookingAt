@@ -1,10 +1,11 @@
 package snownee.jade.test;
 
+import java.util.Arrays;
 import java.util.List;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.Level;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.world.World;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.ui.MessageType;
 import snownee.jade.api.view.ClientViewGroup;
@@ -18,7 +19,7 @@ public enum ExampleProgressProvider implements IServerExtensionProvider<Progress
 	INSTANCE;
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return ExamplePlugin.UID_TEST_PROGRESS;
 	}
 
@@ -26,24 +27,24 @@ public enum ExampleProgressProvider implements IServerExtensionProvider<Progress
 	public List<ClientViewGroup<ProgressView>> getClientGroups(Accessor<?> accessor, List<ViewGroup<ProgressView.Data>> groups) {
 		return ClientViewGroup.map(
 				groups, ProgressView::read, (group, clientGroup) -> {
-					var view = clientGroup.views.getFirst();
+					var view = clientGroup.views.get(0);
 //			view.style.color(0xFFCC0000);
-					view.text = Component.literal("Testtttttttttttttttttttttttttttttttt");
+					view.text = new TextComponentString("Testtttttttttttttttttttttttttttttttt");
 
 					view = clientGroup.views.get(1);
 //			view.style.color(0xFF00CC00);
-					view.text = Component.literal("Test");
+					view.text = new TextComponentString("Test");
 				});
 	}
 
 	@Override
 	public List<ViewGroup<ProgressView.Data>> getGroups(Accessor<?> accessor) {
-		Level world = accessor.getLevel();
+		World world = accessor.getLevel();
 		float period = 40;
-		var progress1 = new ProgressView.Data(((world.getGameTime() % period) + 1) / period);
+		var progress1 = new ProgressView.Data(((world.getWorldTime() % period) + 1) / period);
 
-		var progress2 = new ProgressView.Data(((world.getGameTime() % period) + 1) / period, 1 / period, 1, MessageType.DANGER);
+		var progress2 = new ProgressView.Data(((world.getWorldTime() % period) + 1) / period, 1 / period, 1, MessageType.DANGER);
 		var group = new ViewGroup<>(List.of(progress1, progress2));
-		return List.of(group);
+		return Arrays.asList(group);
 	}
 }

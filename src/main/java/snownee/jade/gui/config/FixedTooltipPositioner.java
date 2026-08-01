@@ -1,12 +1,20 @@
 package snownee.jade.gui.config;
 
-import org.joml.Vector2ic;
+/**
+ * 1.12.2: plain-class replacement of the modern {@code ClientTooltipPositioner} machinery. Always positions
+ * the tooltip at a fixed screen position.
+ */
+public class FixedTooltipPositioner {
 
-import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
+	private final int x;
+	private final int y;
 
-public record FixedTooltipPositioner(Vector2ic pos) implements ClientTooltipPositioner {
-	@Override
-	public Vector2ic positionTooltip(int i, int j, int mouseX, int mouseY, int m, int n) {
-		return pos;
+	public FixedTooltipPositioner(int x, int y) {
+		this.x = x;
+		this.y = y;
+	}
+
+	public int[] positionTooltip(int i, int j, int mouseX, int mouseY, int m, int n) {
+		return new int[]{x, y};
 	}
 }

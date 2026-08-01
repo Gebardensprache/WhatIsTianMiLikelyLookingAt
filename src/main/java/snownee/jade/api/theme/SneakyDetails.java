@@ -4,18 +4,22 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.ARGB;
-import net.minecraft.util.ExtraCodecs;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.JadeIds;
 import snownee.jade.api.ui.BoxElement;
-import snownee.jade.api.ui.IDisplayHelper;
+import snownee.jade.overlay.DisplayHelper;
 import snownee.jade.overlay.OverlayRenderer;
 
 /**
  * Renders the little "sneaky details" indicator used by themed tooltips.
+ * <p>
+ * 1.12.2: {@code GuiGraphicsExtractor} parameter dropped from
+ * {@link #render(float, BoxElement)}. Rendering is done directly via
+ * {@link DisplayHelper#blitSprite(ResourceLocation, int, int, int, int, int)}
+ * following the same pattern as {@code BoxStyle.render(...)}.
+ * {@code RenderPipelines} and {@code ARGB} are not available in 1.12.2;
+ * color packing is done by hand. {@code ExtraCodecs.POSITIVE_FLOAT} replaced
+ * with {@code Codec.floatRange} (available through shadowed DFU).
  */
 public interface SneakyDetails {
 	SneakyDetails DEFAULT = new Simple(JadeIds.JADE("details_arrow"), 7, 5, 0, 0, "breath", 1F, 12F);
@@ -28,12 +32,12 @@ public interface SneakyDetails {
 		throw new UnsupportedOperationException();
 	}
 
-	void render(GuiGraphicsExtractor graphics, float partialTicks, BoxElement element);
+	void render(float partialTicks, BoxElement element);
 
 	String type();
 
 	record Simple(
-			Identifier sprite,
+			ResourceLocation sprite,
 			int width,
 			int height,
 			float offsetX,
@@ -41,19 +45,20 @@ public interface SneakyDetails {
 			String animation,
 			float animationDistance,
 			float animationPeriod) implements SneakyDetails {
+		private static final Codec<ResourceLocation> RESOURCE_LOCATION_CODEC = Codec.STRING.xmap(ResourceLocation::new, ResourceLocation::toString);
 		public static final MapCodec<Simple> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
-				Identifier.CODEC.fieldOf("sprite").forGetter(Simple::sprite),
+				RESOURCE_LOCATION_CODEC.fieldOf("sprite").forGetter(Simple::sprite),
 				Codec.INT.fieldOf("width").forGetter(Simple::width),
 				Codec.INT.fieldOf("height").forGetter(Simple::height),
 				Codec.FLOAT.optionalFieldOf("offsetX", 0F).forGetter(Simple::offsetX),
 				Codec.FLOAT.optionalFieldOf("offsetY", 0F).forGetter(Simple::offsetY),
 				Codec.STRING.optionalFieldOf("animation", "").forGetter(Simple::animation),
-				ExtraCodecs.POSITIVE_FLOAT.optionalFieldOf("animationDistance", 1F).forGetter(Simple::animationDistance),
-				ExtraCodecs.POSITIVE_FLOAT.optionalFieldOf("animationPeriod", 12F).forGetter(Simple::animationPeriod)
+				Codec.floatRange(Float.MIN_VALUE, Float.MAX_VALUE).optionalFieldOf("animationDistance", 1F).forGetter(Simple::animationDistance),
+				Codec.floatRange(Float.MIN_VALUE, Float.MAX_VALUE).optionalFieldOf("animationPeriod", 12F).forGetter(Simple::animationPeriod)
 		).apply(i, Simple::new));
 
 		@Override
-		public void render(GuiGraphicsExtractor graphics, float partialTicks, BoxElement element) {
+		public void render(float partialTicks, BoxElement element) {
 			float x = element.getX() + element.getWidth() / 2f - width / 2f + offsetX;
 			float y = element.getY() + element.getHeight() - height / 2f + offsetY;
 			float alpha = 1f;
@@ -68,10 +73,8 @@ public interface SneakyDetails {
 					return; // too transparent
 				}
 			}
-			graphics.pose().pushMatrix();
-			graphics.pose().translate(x, y);
-			IDisplayHelper.get().blitSprite(graphics, RenderPipelines.GUI_TEXTURED, sprite, 0, 0, width, height, ARGB.white(alpha));
-			graphics.pose().popMatrix();
+			int col = ((int) (alpha * 255) << 24) | 0xFFFFFF;
+			DisplayHelper.INSTANCE.blitSprite(sprite, Math.round(x), Math.round(y), width, height, col);
 		}
 
 		@Override

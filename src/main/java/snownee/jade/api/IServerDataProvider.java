@@ -1,6 +1,6 @@
 package snownee.jade.api;
 
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NBTTagCompound;
 
 /**
  * Supplies server-side data that Jade synchronizes to the client for a specific accessor type.
@@ -19,7 +19,7 @@ public interface IServerDataProvider<T extends Accessor<?>> extends IJadeProvide
 	 * @param data mutable synchronization data shared with other server data providers
 	 * @param accessor accessor describing the current target and context
 	 */
-	void appendServerData(CompoundTag data, T accessor);
+	void appendServerData(NBTTagCompound data, T accessor);
 
 	/**
 	 * Returns whether the client should request data for this accessor.

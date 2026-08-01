@@ -3,8 +3,8 @@ package snownee.jade.impl.config.entry;
 import java.util.function.BiConsumer;
 
 import it.unimi.dsi.fastutil.floats.FloatUnaryOperator;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.Mth;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.MathHelper;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.gui.config.OptionsList;
 import snownee.jade.gui.config.value.InputOptionValue;
@@ -16,7 +16,7 @@ public class FloatConfigEntry extends ConfigEntry<Float> {
 	private float min;
 	private float max;
 
-	public FloatConfigEntry(Identifier id, float defaultValue, float min, float max, boolean slider) {
+	public FloatConfigEntry(ResourceLocation id, float defaultValue, float min, float max, boolean slider) {
 		super(id, defaultValue);
 		this.slider = slider;
 		this.min = min;
@@ -38,7 +38,7 @@ public class FloatConfigEntry extends ConfigEntry<Float> {
 			OptionsList options,
 			String optionName,
 			IPluginConfig config,
-			BiConsumer<Identifier, Object> setter) {
+			BiConsumer<ResourceLocation, Object> setter) {
 		if (slider) {
 			return options.slider(
 					optionName,
@@ -51,7 +51,7 @@ public class FloatConfigEntry extends ConfigEntry<Float> {
 			return options.input(
 					optionName,
 					() -> config.getFloat(id),
-					f -> setter.accept(id, Mth.clamp(f, min, max)),
+					f -> setter.accept(id, MathHelper.clamp(f, min, max)),
 					InputOptionValue.FLOAT.and($ -> isValidValue(Float.valueOf($.replace(",", ".")))));
 		}
 	}

@@ -3,10 +3,12 @@ package snownee.jade.addon.core;
 import java.text.DecimalFormat;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Vec3i;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3i;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
 import snownee.jade.JadeClient;
 import snownee.jade.api.Accessor;
 import snownee.jade.api.BlockAccessor;
@@ -39,7 +41,8 @@ public abstract class DistanceProvider implements IToggleableProvider {
 
 		@Override
 		public void appendTooltip(ITooltip tooltip, EntityAccessor accessor, IPluginConfig config) {
-			append(tooltip, accessor, accessor.getEntity().blockPosition(), config);
+			// 1.12.2: Entity#blockPosition() is Entity#getPosition()
+			append(tooltip, accessor, accessor.getEntity().getPosition(), config);
 		}
 	}
 
@@ -47,12 +50,17 @@ public abstract class DistanceProvider implements IToggleableProvider {
 	private static final int[] colors = {0xef9a9a, 0xa5d6a7, 0x90caf9, 0xb02a37, 0x198754, 0x0a58ca};
 
 	public static String distance(Accessor<?> accessor) {
-		float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
-		return fmt.format(accessor.getPlayer().getEyePosition(partialTick).distanceTo(accessor.getHitResult().getLocation()));
+		// 1.12.2: no DeltaTracker; Minecraft#getRenderPartialTicks() is the render partial tick
+		float partialTick = Minecraft.getMinecraft().getRenderPartialTicks();
+		return fmt.format(accessor.getPlayer().getPositionEyes(partialTick).distanceTo(accessor.getHitResult().hitVec));
 	}
 
 	public static TextElement xyz(Vec3i pos) {
-		Component display = Component.translatable("jade.blockpos", display(pos.getX(), 0), display(pos.getY(), 1), display(pos.getZ(), 2));
+		ITextComponent display = new TextComponentTranslation(
+				"jade.blockpos",
+				display(pos.getX(), 0),
+				display(pos.getY(), 1),
+				display(pos.getZ(), 2));
 		String narration = JadeClient.formatString(
 				"narration.jade.blockpos",
 				NarrationHelper.number(pos.getX()),
@@ -63,11 +71,11 @@ public abstract class DistanceProvider implements IToggleableProvider {
 		return text;
 	}
 
-	public static Component display(int i, int colorIndex) {
+	public static ITextComponent display(int i, int colorIndex) {
 		if (IThemeHelper.get().isLightColorScheme()) {
 			colorIndex += 3;
 		}
-		return Component.literal(Integer.toString(i)).withStyle(ThemeHelper.colorStyle(colors[colorIndex]));
+		return new TextComponentString(Integer.toString(i)).setStyle(ThemeHelper.colorStyle(colors[colorIndex]));
 	}
 
 	public void append(ITooltip tooltip, Accessor<?> accessor, BlockPos pos, IPluginConfig config) {
@@ -76,24 +84,25 @@ public abstract class DistanceProvider implements IToggleableProvider {
 		String distanceMsg = distance ? JadeClient.formatString("narration.jade.distance", distanceVal) : null;
 		if (config.get(JadeIds.CORE_COORDINATES)) {
 			if (config.get(JadeIds.CORE_REL_COORDINATES) && JadeUI.hasControlDown()) {
-				tooltip.add(xyz(pos.subtract(BlockPos.containing(accessor.getPlayer().getEyePosition()))));
+				// 1.12.2: no BlockPos.containing(Vec3); BlockPos has a Vec3d constructor that floors
+				tooltip.add(xyz(pos.subtract(new BlockPos(accessor.getPlayer().getPositionEyes(1.0F)))));
 			} else {
 				tooltip.add(xyz(pos));
 			}
 			if (distance) {
 				tooltip.append(JadeUI
-						.text(Component.translatable("jade.distance1", distanceVal))
+						.text(new TextComponentTranslation("jade.distance1", distanceVal))
 						.narration(distanceMsg));
 			}
 		} else if (distance) {
 			tooltip.add(JadeUI
-					.text(Component.translatable("jade.distance2", distanceVal))
+					.text(new TextComponentTranslation("jade.distance2", distanceVal))
 					.narration(distanceMsg));
 		}
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.CORE_DISTANCE;
 	}
 

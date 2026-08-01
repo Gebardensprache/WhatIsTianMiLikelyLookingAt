@@ -2,8 +2,8 @@ package snownee.jade.impl.ui;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.util.text.ITextComponent;
 import snownee.jade.api.ui.Element;
 
 public class CompoundElement extends Element {
@@ -19,16 +19,16 @@ public class CompoundElement extends Element {
 	}
 
 	@Override
-	public @Nullable Component getNarration() {
+	public @Nullable ITextComponent getNarration() {
 		return large.getNarration();
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-		large.extractRenderState(graphics, mouseX, mouseY, partialTicks);
-		graphics.pose().pushMatrix();
-		small.extractRenderState(graphics, mouseX, mouseY, partialTicks);
-		graphics.pose().popMatrix();
+	public void extractRenderState(int mouseX, int mouseY, float partialTicks) {
+		large.extractRenderState(mouseX, mouseY, partialTicks);
+		GlStateManager.pushMatrix();
+		small.extractRenderState(mouseX, mouseY, partialTicks);
+		GlStateManager.popMatrix();
 	}
 
 	@Override

@@ -11,7 +11,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Lists;
 
-import net.minecraft.util.StringRepresentable;
+import snownee.jade.api.StringRepresentable;
 import snownee.jade.overlay.DisplayHelper;
 
 public class WordCutter {
@@ -86,13 +86,13 @@ public class WordCutter {
 		}
 		if (!tokens.isEmpty() && tokens.getFirst().type == TokenType.SEPARATOR) {
 			widthSum -= tokens.getFirst().width;
-			tokens.removeFirst();
+			tokens.remove(0);
 		}
 		while (!tokens.isEmpty()) {
 			Token last = tokens.getLast();
 			if (last.type.canRemoveTail()) {
 				widthSum -= last.width;
-				tokens.removeLast();
+				tokens.remove(tokens.size() - 1);
 			} else {
 				break;
 			}
@@ -152,14 +152,14 @@ public class WordCutter {
 		}
 		Token last;
 		do {
-			last = tokens.removeLast();
+			last = tokens.remove(tokens.size() - 1);
 			widthSum -= last.width;
 		} while (tooLong());
 		String ellipsis = addEllipsis ? "..." : "";
 		if (last.type == TokenType.WORD) {
 			int expectedWidth = addEllipsis ? Math.max(maxWidth - widthSum - 5, 0) : maxWidth - widthSum;
 			if (last.width > expectedWidth) {
-				ellipsis = DisplayHelper.font().plainSubstrByWidth(last.str, addEllipsis ? Math.max(expectedWidth - 5, 0) : expectedWidth) +
+				ellipsis = DisplayHelper.font().raw().trimStringToWidth(last.str, addEllipsis ? Math.max(expectedWidth - 5, 0) : expectedWidth) +
 						ellipsis;
 			}
 		} else {
@@ -181,7 +181,35 @@ public class WordCutter {
 		}
 	}
 
-	public record Token(String str, TokenType type, int depth, int width) {}
+	public static final class Token {
+		public final String str;
+		public final TokenType type;
+		public final int depth;
+		public final int width;
+
+		public Token(String str, TokenType type, int depth, int width) {
+			this.str = str;
+			this.type = type;
+			this.depth = depth;
+			this.width = width;
+		}
+
+		public String str() {
+			return str;
+		}
+
+		public TokenType type() {
+			return type;
+		}
+
+		public int depth() {
+			return depth;
+		}
+
+		public int width() {
+			return width;
+		}
+	}
 
 	public interface TokenClassifier {
 		TokenType classify(String s);

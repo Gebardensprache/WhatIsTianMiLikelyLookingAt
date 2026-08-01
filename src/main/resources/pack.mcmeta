@@ -1,6 +1,6 @@
 {
-	"pack": {
-		"description": "Jade Resources",
-		"pack_format": 31
-	}
+  "pack": {
+    "pack_format": 3,
+    "description": "Jade resources"
+  }
 }

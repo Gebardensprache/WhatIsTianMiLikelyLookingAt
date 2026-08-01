@@ -5,9 +5,8 @@ import java.util.Objects;
 import org.jetbrains.annotations.Contract;
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.ResourceLocation;
 
 /**
  * Rendering strategy for a progress bar.
@@ -17,7 +16,7 @@ public abstract class ProgressStyle {
 	protected boolean fitContentX = true;
 	protected boolean fitContentY = true;
 	protected ScreenDirection direction = ScreenDirection.RIGHT;
-	protected @Nullable Identifier foreground;
+	protected @Nullable ResourceLocation foreground;
 	protected boolean canDecrease;
 
 	/**
@@ -90,7 +89,7 @@ public abstract class ProgressStyle {
 	 * @return this style
 	 */
 	@Contract("_ -> this")
-	public ProgressStyle foreground(@Nullable Identifier foreground) {
+	public ProgressStyle foreground(@Nullable ResourceLocation foreground) {
 		this.foreground = foreground;
 		return this;
 	}
@@ -100,7 +99,7 @@ public abstract class ProgressStyle {
 	 *
 	 * @return foreground sprite or {@code null}
 	 */
-	public @Nullable Identifier foreground() {
+	public @Nullable ResourceLocation foreground() {
 		return foreground;
 	}
 
@@ -128,13 +127,12 @@ public abstract class ProgressStyle {
 	/**
 	 * Renders the progress bar.
 	 *
-	 * @param guiGraphics graphics context
-	 * @param x x position
-	 * @param y y position
-	 * @param w width
-	 * @param h height
+	 * @param x        x position
+	 * @param y        y position
+	 * @param w        width
+	 * @param h        height
 	 * @param progress progress value in the {@code 0..1} range
-	 * @param text optional label
+	 * @param text     optional label
 	 */
-	public abstract void render(GuiGraphicsExtractor guiGraphics, float x, float y, float w, float h, float progress, Component text);
+	public abstract void render(float x, float y, float w, float h, float progress, ITextComponent text);
 }

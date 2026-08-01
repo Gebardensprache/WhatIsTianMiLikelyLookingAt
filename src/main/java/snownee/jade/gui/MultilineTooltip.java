@@ -4,29 +4,36 @@ import java.util.List;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.network.chat.Component;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
 
+/**
+ * 1.12.2: the modern {@code Tooltip} type does not exist, so the static factory is replaced by a plain
+ * {@code ITextComponent} composer that joins the lines with linebreak components. Screens that need the tooltip
+ * rendered call {@code BaseOptionsScreen.setTooltipForNextFrame}/{@code drawHoveringText} instead.
+ */
 public class MultilineTooltip {
-	public static Tooltip create(List<Component> components) {
+
+	public static ITextComponent create(List<ITextComponent> components) {
 		return create(components, components);
 	}
 
-	public static Tooltip create(List<Component> components, @Nullable List<Component> narration) {
-		return Tooltip.create(compose(components), narration == null ? null : compose(narration));
+	public static ITextComponent create(List<ITextComponent> components, @Nullable List<ITextComponent> narration) {
+		return compose(components);
 	}
 
-	private static Component compose(List<Component> components) {
+	private static ITextComponent compose(List<ITextComponent> components) {
 		if (components.isEmpty()) {
-			return Component.empty();
+			return new TextComponentString("");
 		}
 		if (components.size() == 1) {
-			return components.getFirst();
+			return components.get(0);
 		}
-		Component linebreak = Component.literal("\n");
-		return components.stream().skip(1).reduce(
-				components.getFirst().copy(),
-				(a, b) -> a.append(linebreak).append(b),
-				(a, b) -> a.append(linebreak).append(b));
+		ITextComponent linebreak = new TextComponentString("\n");
+		ITextComponent result = components.get(0).createCopy();
+		for (int i = 1; i < components.size(); i++) {
+			result.appendSibling(linebreak).appendSibling(components.get(i));
+		}
+		return result;
 	}
 }

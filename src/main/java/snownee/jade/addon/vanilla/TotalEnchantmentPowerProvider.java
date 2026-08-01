@@ -1,10 +1,9 @@
 package snownee.jade.addon.vanilla;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.EnchantingTableBlock;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.world.World;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -19,27 +18,40 @@ public class TotalEnchantmentPowerProvider implements IBlockComponentProvider {
 
 	@Override
 	public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-		Level world = accessor.getLevel();
+		World world = accessor.getLevel();
 		BlockPos pos = accessor.getPosition();
 		float power = 0;
-		// EnchantmentMenu.java
-		for (BlockPos blockpos : EnchantingTableBlock.BOOKSHELF_OFFSETS) {
-			if (EnchantingTableBlock.isValidBookShelf(world, pos, blockpos)) {
-				power += getPower(world, pos.offset(blockpos));
+		// ContainerEnchantment.java
+		// 1.12.2: there is no EnchantingTableBlock.BOOKSHELF_OFFSETS / isValidBookShelf. The
+		// vanilla scan lives inline in ContainerEnchantment#onCraftMatrixChanged: for each of
+		// the 8 horizontal neighbours that is clear (air at both y and y+1), count the shelf
+		// two blocks out on that axis at y and y+1, plus the two diagonal in-between columns.
+		for (int j = -1; j <= 1; ++j) {
+			for (int k = -1; k <= 1; ++k) {
+				if ((j != 0 || k != 0) && world.isAirBlock(pos.add(k, 0, j)) && world.isAirBlock(pos.add(k, 1, j))) {
+					power += getPower(world, pos.add(k * 2, 0, j * 2));
+					power += getPower(world, pos.add(k * 2, 1, j * 2));
+					if (k != 0 && j != 0) {
+						power += getPower(world, pos.add(k * 2, 0, j));
+						power += getPower(world, pos.add(k * 2, 1, j));
+						power += getPower(world, pos.add(k, 0, j * 2));
+						power += getPower(world, pos.add(k, 1, j * 2));
+					}
+				}
 			}
 		}
 
 		if (power > 0) {
-			tooltip.add(Component.translatable("jade.ench_power", IThemeHelper.get().info(DisplayHelper.dfCommas.format(power))));
+			tooltip.add(new TextComponentTranslation("jade.ench_power", IThemeHelper.get().info(DisplayHelper.dfCommas.format(power))));
 		}
 	}
 
-	public static float getPower(Level world, BlockPos pos) {
+	public static float getPower(World world, BlockPos pos) {
 		return ClientProxy.getEnchantPowerBonus(world.getBlockState(pos), world, pos);
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_TOTAL_ENCHANTMENT_POWER;
 	}
 

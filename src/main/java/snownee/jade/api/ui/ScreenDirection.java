@@ -1,5 +1,6 @@
 package snownee.jade.api.ui;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -8,7 +9,7 @@ import java.util.List;
 public enum ScreenDirection {
 	UP, DOWN, LEFT, RIGHT;
 
-	public static final List<ScreenDirection> VALUES = List.of(values());
+	public static final List<ScreenDirection> VALUES = Arrays.asList(values());
 
 	public static ScreenDirection fromIndex(int index) {
 		return VALUES.get(index);

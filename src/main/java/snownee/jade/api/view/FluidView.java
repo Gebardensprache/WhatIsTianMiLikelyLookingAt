@@ -1,15 +1,17 @@
 package snownee.jade.api.view;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.world.level.material.Fluids;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.fluid.JadeFluidObject;
 import snownee.jade.api.ui.Element;
 import snownee.jade.api.ui.JadeUI;
@@ -21,7 +23,7 @@ import snownee.jade.util.FluidTextHelper;
  */
 public class FluidView {
 
-	public static final Component EMPTY_FLUID = Component.translatable("jade.fluid.empty");
+	public static final ITextComponent EMPTY_FLUID = new TextComponentTranslation("jade.fluid.empty");
 
 	/**
 	 * Overlay element rendered for the fluid.
@@ -30,11 +32,11 @@ public class FluidView {
 	/**
 	 * Current amount text.
 	 */
-	public Component current;
+	public ITextComponent current;
 	/**
 	 * Maximum amount text.
 	 */
-	public Component max;
+	public ITextComponent max;
 	/**
 	 * Fill ratio.
 	 */
@@ -43,12 +45,12 @@ public class FluidView {
 	 * Optional fluid name.
 	 */
 	@Nullable
-	public Component fluidName;
+	public ITextComponent fluidName;
 	/**
 	 * Optional override text.
 	 */
 	@Nullable
-	public Component overrideText;
+	public ITextComponent overrideText;
 
 	/**
 	 * Creates a fluid view.
@@ -57,7 +59,7 @@ public class FluidView {
 	 * @param current current amount text
 	 * @param max maximum amount text
 	 */
-	public FluidView(Element overlay, Component current, Component max) {
+	public FluidView(Element overlay, ITextComponent current, ITextComponent max) {
 		this.overlay = Objects.requireNonNull(overlay);
 		this.current = Objects.requireNonNull(current);
 		this.max = Objects.requireNonNull(max);
@@ -74,18 +76,18 @@ public class FluidView {
 		if (data.capacity <= 0 || data.fluids.size() > 1) {
 			return null;
 		}
-		JadeFluidObject fluidObject = data.fluids.isEmpty() ? JadeFluidObject.empty() : data.fluids.getFirst();
+		JadeFluidObject fluidObject = data.fluids.isEmpty() ? JadeFluidObject.empty() : data.fluids.get(0);
 		long amount = fluidObject.getAmount();
-		Component current = FluidTextHelper.getMillibuckets(amount, true);
-		Component max = FluidTextHelper.getMillibuckets(data.capacity, true);
+		ITextComponent current = FluidTextHelper.getMillibuckets(amount, true);
+		ITextComponent max = FluidTextHelper.getMillibuckets(data.capacity, true);
 		FluidView view = new FluidView(JadeUI.fluid(fluidObject), current, max);
 		view.fluidName = fluidObject.getDisplayName();
 		view.ratio = (float) ((double) amount / data.capacity);
-		if (fluidObject.is(Fluids.EMPTY)) {
+		if (fluidObject.isEmpty()) {
 			view.overrideText = NarratableComponent.translatable(
 					"jade.fluid",
 					EMPTY_FLUID,
-					NarratableComponent.attach(Component.literal(view.max.getString()), view.max));
+					NarratableComponent.attach(new TextComponentString(view.max.getUnformattedComponentText()), view.max));
 		}
 		return view;
 	}
@@ -94,12 +96,26 @@ public class FluidView {
 	 * Serialized fluid storage data.
 	 */
 	public record Data(List<JadeFluidObject> fluids, long capacity) {
-		public static final StreamCodec<RegistryFriendlyByteBuf, Data> STREAM_CODEC = StreamCodec.composite(
-				JadeFluidObject.STREAM_CODEC.apply(ByteBufCodecs.list()),
-				Data::fluids,
-				ByteBufCodecs.LONG,
-				Data::capacity,
-				Data::new);
+		public static final DataCodec<Data> STREAM_CODEC = new DataCodec<>() {
+			@Override
+			public Data decode(PacketBuffer buf) {
+				int size = buf.readVarInt();
+				List<JadeFluidObject> fluids = new ArrayList<>(size);
+				for (int i = 0; i < size; i++) {
+					fluids.add(JadeFluidObject.STREAM_CODEC.decode(buf));
+				}
+				return new Data(fluids, buf.readLong());
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, Data value) {
+				buf.writeVarInt(value.fluids.size());
+				for (JadeFluidObject fluid : value.fluids) {
+					JadeFluidObject.STREAM_CODEC.encode(buf, fluid);
+				}
+				buf.writeLong(value.capacity);
+			}
+		};
 
 		/**
 		 * Creates a single-fluid payload.
@@ -108,7 +124,7 @@ public class FluidView {
 		 * @param capacity storage capacity
 		 */
 		public Data(JadeFluidObject fluid, long capacity) {
-			this(List.of(fluid), capacity);
+			this(Arrays.asList(fluid), capacity);
 		}
 	}
 

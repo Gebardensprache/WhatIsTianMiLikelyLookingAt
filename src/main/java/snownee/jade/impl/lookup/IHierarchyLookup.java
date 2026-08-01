@@ -11,9 +11,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.google.common.collect.Streams;
 
-import net.minecraft.core.IdMap;
-import net.minecraft.core.IdMapper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.IJadeProvider;
 import snownee.jade.impl.PriorityStore;
 import snownee.jade.impl.WailaCommonRegistration;
@@ -29,7 +27,7 @@ public interface IHierarchyLookup<T extends IJadeProvider> {
 
 	IdMapper<T> idMapper();
 
-	default List<Identifier> mappedIds() {
+	default List<ResourceLocation> mappedIds() {
 		return Streams.stream(idMapper())
 				.map(IJadeProvider::getUid)
 				.toList();
@@ -50,7 +48,7 @@ public interface IHierarchyLookup<T extends IJadeProvider> {
 
 	void keyed();
 
-	@Nullable T byKey(Identifier key);
+	@Nullable T byKey(ResourceLocation key);
 
 	boolean isEmpty();
 
@@ -58,23 +56,23 @@ public interface IHierarchyLookup<T extends IJadeProvider> {
 
 	void invalidate();
 
-	void loadComplete(PriorityStore<Identifier, IJadeProvider> priorityStore);
+	void loadComplete(PriorityStore<ResourceLocation, IJadeProvider> priorityStore);
 
 	default IdMapper<T> createIdMapper() {
 		List<T> list = entries().flatMap(entry -> entry.getValue().stream()).toList();
 		IdMapper<T> idMapper = new IdMapper<>(list.size());
 		for (T provider : list) {
-			if (idMapper.getId(provider) == IdMap.DEFAULT) {
+			if (idMapper.getId(provider) == IdMapper.DEFAULT) {
 				idMapper.add(provider);
 			}
 		}
 		return idMapper;
 	}
 
-	default void remapIds(List<Identifier> keys) {
+	default void remapIds(List<ResourceLocation> keys) {
 		IdMapper<T> idMapper = Objects.requireNonNull(idMapper());
 		int i = 0;
-		for (Identifier key : keys) {
+		for (ResourceLocation key : keys) {
 			T object = byKey(key);
 			if (object != null) {
 				idMapper.addMapping(object, i);

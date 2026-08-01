@@ -1,8 +1,10 @@
 package snownee.jade.addon.access;
 
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.block.BlockCake;
+import net.minecraft.block.BlockCauldron;
+import net.minecraft.block.BlockSnow;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.JadeClient;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
@@ -16,31 +18,22 @@ public class BlockAmountProvider implements IBlockComponentProvider {
 		if (!config.get(JadeIds.ACCESS_BLOCK_DETAILS)) {
 			return;
 		}
-		BlockState blockState = accessor.getBlockState();
-		int amount = -1;
-		if (blockState.hasProperty(BlockStateProperties.PICKLES)) {
-			amount = blockState.getValue(BlockStateProperties.PICKLES);
-		} else if (blockState.hasProperty(BlockStateProperties.CANDLES)) {
-			amount = blockState.getValue(BlockStateProperties.CANDLES);
-		} else if (blockState.hasProperty(BlockStateProperties.EGGS)) {
-			amount = blockState.getValue(BlockStateProperties.EGGS);
+		IBlockState blockState = accessor.getBlockState();
+		// 1.12.2: sea pickles, candles and turtle eggs do not exist (all are 1.13+), so their
+		// "amount" branch is dropped entirely.
+		if (blockState.getPropertyKeys().contains(BlockCake.BITES)) {
+			tooltip.add(JadeClient.format("jade.access.block.bites", blockState.getValue(BlockCake.BITES)));
 		}
-		if (amount >= 0) {
-			tooltip.add(JadeClient.format("jade.access.block.amount", amount));
+		if (blockState.getPropertyKeys().contains(BlockSnow.LAYERS)) {
+			tooltip.add(JadeClient.format("jade.access.block.layers", blockState.getValue(BlockSnow.LAYERS)));
 		}
-		if (blockState.hasProperty(BlockStateProperties.BITES)) {
-			tooltip.add(JadeClient.format("jade.access.block.bites", blockState.getValue(BlockStateProperties.BITES)));
-		}
-		if (blockState.hasProperty(BlockStateProperties.LAYERS)) {
-			tooltip.add(JadeClient.format("jade.access.block.layers", blockState.getValue(BlockStateProperties.LAYERS)));
-		}
-		if (blockState.hasProperty(BlockStateProperties.LEVEL_CAULDRON)) {
-			tooltip.add(JadeClient.format("jade.access.block.level", blockState.getValue(BlockStateProperties.LEVEL_CAULDRON)));
+		if (blockState.getPropertyKeys().contains(BlockCauldron.LEVEL)) {
+			tooltip.add(JadeClient.format("jade.access.block.level", blockState.getValue(BlockCauldron.LEVEL)));
 		}
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.ACCESS_BLOCK_AMOUNT;
 	}
 

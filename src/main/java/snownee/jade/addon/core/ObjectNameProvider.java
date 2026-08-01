@@ -4,27 +4,25 @@ import java.util.Objects;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentSerialization;
-import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.MenuProvider;
-import net.minecraft.world.Nameable;
-import net.minecraft.world.entity.Display.BlockDisplay;
-import net.minecraft.world.entity.Display.ItemDisplay;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.npc.villager.Villager;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.ChestBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.ChestBlockEntity;
-import net.minecraft.world.level.block.state.properties.ChestType;
+import net.minecraft.block.BlockChest;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityList;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.passive.EntityVillager;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.InventoryLargeChest;
+import net.minecraft.item.ItemStack;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.RayTraceResult;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.world.ILockableContainer;
+import net.minecraft.world.IWorldNameable;
 import snownee.jade.api.BlockAccessor;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.IEntityComponentProvider;
@@ -40,53 +38,57 @@ import snownee.jade.api.ui.Element;
 import snownee.jade.api.ui.JadeUI;
 import snownee.jade.impl.WailaCommonRegistration;
 import snownee.jade.impl.ui.ItemStackElement;
-import snownee.jade.mixin.EntityAccess;
 
 public abstract class ObjectNameProvider implements IToggleableProvider {
-	public static Component getEntityName(Entity entity, boolean accessibilityDetails) {
-		Component customName = entity.getCustomName();
+	public static ITextComponent getEntityName(Entity entity, boolean accessibilityDetails) {
+		ITextComponent customName = entity.hasCustomName() ? entity.getDisplayName() : null;
 		if (customName != null && !accessibilityDetails) {
 			return customName;
 		}
-		Component displayName = null;
+		ITextComponent displayName = null;
 		boolean wantTypeName = accessibilityDetails;
 		if (WailaCommonRegistration.instance().entityTypeOperations().shouldPick(entity)) {
-			ItemStack stack = entity.getPickResult();
+			ItemStack stack = entity.getPickedResult(new RayTraceResult(entity));
 			if (stack != null && !stack.isEmpty()) {
-				displayName = stack.getHoverName();
+				// 1.12.2: ItemStack#getDisplayName returns a String rather than a component.
+				displayName = new TextComponentString(stack.getDisplayName());
 			}
 		}
 		if (displayName == null) {
-			displayName = switch (entity) {
-				case Player ignored -> {
-					wantTypeName = false;
-					yield entity.getDisplayName();
-				}
-				case Villager ignored -> {
-					wantTypeName = false;
-					yield entity.getType().getDescription();
-				}
-				case ItemEntity itemEntity -> itemEntity.getItem().getHoverName();
-				case ItemDisplay itemDisplay when !itemDisplay.getItemStack().isEmpty() -> itemDisplay.getItemStack().getHoverName();
-				case BlockDisplay blockDisplay when !blockDisplay.getBlockState().isAir() ->
-						blockDisplay.getBlockState().getBlock().getName();
-				default -> entity.getName();
-			};
+			if (entity instanceof EntityPlayer) {
+				wantTypeName = false;
+				displayName = entity.getDisplayName();
+			} else if (entity instanceof EntityVillager) {
+				// 1.12.2: villager professions do not expose a separate entity-type description.
+				wantTypeName = false;
+				displayName = entity.getDisplayName();
+			} else if (entity instanceof EntityItem itemEntity) {
+				displayName = new TextComponentString(itemEntity.getItem().getDisplayName());
+			} else {
+				// 1.12.2: Display entities were introduced after this version.
+				displayName = entity.getDisplayName();
+			}
 		}
 		Objects.requireNonNull(displayName);
 		if (accessibilityDetails) {
-			if (customName != null && displayName.getString().equals(customName.getString())) {
+			if (customName != null && displayName.getUnformattedComponentText().equals(customName.getUnformattedComponentText())) {
 				displayName = customName;
 				customName = null;
 			}
 			if (wantTypeName) {
-				Component typeName = ((EntityAccess) entity).callGetTypeName();
-				if (!displayName.getString().equals(typeName.getString())) {
-					displayName = Component.translatable("jade.typeNameEntity", displayName, typeName);
+				// 1.12.2: no Entity#getTypeName; derive the type name from the entity registry so a
+				// custom-named mob still reports its species. Key format is "entity.<oldId>.name".
+				ResourceLocation entityKey = EntityList.getKey(entity);
+				String oldId = entityKey == null ? null : EntityList.getTranslationName(entityKey);
+				ITextComponent typeName = oldId == null
+						? new TextComponentString("Unknown")
+						: new TextComponentTranslation("entity." + oldId + ".name");
+				if (!displayName.getUnformattedComponentText().equals(typeName.getUnformattedComponentText())) {
+					displayName = new TextComponentTranslation("jade.typeNameEntity", displayName, typeName);
 				}
 			}
 			if (customName != null) {
-				return Component.translatable("jade.customNameEntity", customName, displayName);
+				return new TextComponentTranslation("jade.customNameEntity", customName, displayName);
 			}
 		}
 		return displayName;
@@ -97,28 +99,28 @@ public abstract class ObjectNameProvider implements IToggleableProvider {
 
 		@Override
 		public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-			Component name;
+			ITextComponent name;
 			if (accessor.isServersideContent()) {
-				name = accessor.getServersideRep().getHoverName();
+				name = new TextComponentString(accessor.getServersideRep().getDisplayName());
 			} else {
 				name = BlockData.INSTANCE.decodeFromData(accessor).orElse(null);
 			}
 			if (name == null && WailaCommonRegistration.instance().blockOperations().shouldPick(accessor.getBlockState())) {
 				ItemStack pick = accessor.getPickedResult();
 				if (!pick.isEmpty()) {
-					name = pick.getHoverName();
+					name = new TextComponentString(pick.getDisplayName());
 				}
 			}
 			if (name == null) {
-				String key = accessor.getBlock().getDescriptionId();
+				String key = accessor.getBlock().getTranslationKey();
 				if (JadeUI.hasTranslation(key)) {
-					name = accessor.getBlock().getName();
+					name = new TextComponentString(accessor.getBlock().getLocalizedName());
 				} else {
 					ItemStack pick = accessor.getPickedResult();
 					if (!pick.isEmpty()) {
-						name = pick.getHoverName();
+						name = new TextComponentString(pick.getDisplayName());
 					} else {
-						name = Component.literal(key);
+						name = new TextComponentString(key);
 					}
 				}
 			}
@@ -129,7 +131,7 @@ public abstract class ObjectNameProvider implements IToggleableProvider {
 	public static class ForEntity extends ObjectNameProvider implements IEntityComponentProvider {
 		public static final ForEntity INSTANCE = new ForEntity();
 
-		public static void addName(ITooltip tooltip, Component name) {
+		public static void addName(ITooltip tooltip, ITextComponent name) {
 			name = IThemeHelper.get().title(name);
 			if (IWailaConfig.get().overlay().getIconMode() != IWailaConfig.IconMode.INLINE) {
 				tooltip.add(name);
@@ -153,9 +155,9 @@ public abstract class ObjectNameProvider implements IToggleableProvider {
 
 		@Override
 		public void appendTooltip(ITooltip tooltip, EntityAccessor accessor, IPluginConfig config) {
-			Component name;
+			ITextComponent name;
 			if (accessor.isServersideContent()) {
-				name = accessor.getServersideRep().getHoverName();
+				name = new TextComponentString(accessor.getServersideRep().getDisplayName());
 			} else {
 				name = getEntityName(
 						accessor.getEntity(),
@@ -165,48 +167,59 @@ public abstract class ObjectNameProvider implements IToggleableProvider {
 		}
 	}
 
-	public static class BlockData extends ObjectNameProvider implements StreamServerDataProvider<BlockAccessor, Component> {
+	public static class BlockData extends ObjectNameProvider implements StreamServerDataProvider<BlockAccessor, ITextComponent> {
 		public static final BlockData INSTANCE = new BlockData();
+		private static final DataCodec<ITextComponent> COMPONENT_CODEC = new DataCodec<>() {
+			@Override
+			public ITextComponent decode(PacketBuffer buf) {
+				return ITextComponent.Serializer.jsonToComponent(buf.readString(32767));
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, ITextComponent value) {
+				buf.writeString(ITextComponent.Serializer.componentToJson(value));
+			}
+		};
 
 		@Override
 		@Nullable
-		public Component streamData(BlockAccessor accessor) {
-			if (!(accessor.getBlockEntity() instanceof Nameable nameable)) {
+		public ITextComponent streamData(BlockAccessor accessor) {
+			TileEntity blockEntity = accessor.getBlockEntity();
+			if (!(blockEntity instanceof IWorldNameable nameable)) {
 				return null;
 			}
-			if (nameable instanceof ChestBlockEntity && accessor.getBlock() instanceof ChestBlock && accessor.getBlockState().getValue(
-					ChestBlock.TYPE) != ChestType.SINGLE) {
-				MenuProvider menuProvider = accessor.getBlockState().getMenuProvider(accessor.getLevel(), accessor.getPosition());
-				if (menuProvider != null) {
-					Component name = menuProvider.getDisplayName();
-					if (!(name.getContents() instanceof TranslatableContents contents) ||
-							!"container.chestDouble".equals(contents.getKey())) {
+			if (accessor.getBlock() instanceof BlockChest chest) {
+				// 1.12.2: double chests are exposed as InventoryLargeChest rather than state properties.
+				ILockableContainer container = chest.getLockableContainer(accessor.getLevel(), accessor.getPosition());
+				if (container instanceof InventoryLargeChest) {
+					ITextComponent name = container.getDisplayName();
+					if (!(name instanceof TextComponentTranslation translation) ||
+							!"container.chestDouble".equals(translation.getKey())) {
 						return name;
 					}
 				}
-			} else if (nameable.hasCustomName()) {
+			}
+			if (nameable.hasCustomName()) {
 				return nameable.getDisplayName();
 			}
-			return accessor.typedBlockEntity().components().get(DataComponents.ITEM_NAME);
+			// 1.12.2: tile-entity data components, including ITEM_NAME, do not exist.
+			return null;
 		}
 
 		@Override
-		public StreamCodec<RegistryFriendlyByteBuf, Component> streamCodec() {
-			return ComponentSerialization.STREAM_CODEC;
+		public DataCodec<ITextComponent> streamCodec() {
+			return COMPONENT_CODEC;
 		}
 
 		@Override
 		public boolean shouldRequestData(BlockAccessor accessor) {
-			BlockEntity blockEntity = accessor.getBlockEntity();
-			if (blockEntity == null) {
-				return false;
-			}
-			return blockEntity instanceof Nameable || blockEntity.components().has(DataComponents.ITEM_NAME);
+			// 1.12.2: only IWorldNameable tile entities can provide a server-side custom name.
+			return accessor.getBlockEntity() instanceof IWorldNameable;
 		}
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.CORE_OBJECT_NAME;
 	}
 

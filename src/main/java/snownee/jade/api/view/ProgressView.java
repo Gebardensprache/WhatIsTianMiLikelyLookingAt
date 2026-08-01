@@ -1,8 +1,10 @@
 package snownee.jade.api.view;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.jspecify.annotations.Nullable;
@@ -10,9 +12,9 @@ import org.jspecify.annotations.Nullable;
 import com.google.common.base.Preconditions;
 
 import io.netty.buffer.ByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.text.ITextComponent;
+import snownee.jade.api.DataCodec;
 import snownee.jade.api.theme.IThemeHelper;
 import snownee.jade.api.ui.BoxStyle;
 import snownee.jade.api.ui.Element;
@@ -28,7 +30,7 @@ public class ProgressView {
 	/**
 	 * Progress parts to render.
 	 */
-	public List<Part> parts = List.of();
+	public List<Part> parts = Arrays.asList();
 	/**
 	 * Progress bar style.
 	 */
@@ -40,7 +42,7 @@ public class ProgressView {
 	/**
 	 * Optional text label.
 	 */
-	public @Nullable Component text;
+	public @Nullable ITextComponent text;
 
 	/**
 	 * Creates a progress view with the given styles.
@@ -64,7 +66,7 @@ public class ProgressView {
 	 */
 	public <T> ProgressView(ProgressStyle style, BoxStyle boxStyle, Stream<T> items, Function<T, Part> mapper) {
 		this(style, boxStyle);
-		this.parts = items.map(mapper).toList();
+		this.parts = items.map(mapper).collect(Collectors.toList());
 	}
 
 	/**
@@ -75,8 +77,8 @@ public class ProgressView {
 	 * @param style progress style
 	 * @param boxStyle container box style
 	 */
-	public ProgressView(ProgressView.Part progress, @Nullable Component text, ProgressStyle style, BoxStyle boxStyle) {
-		this(List.of(progress), text, style, boxStyle);
+	public ProgressView(ProgressView.Part progress, @Nullable ITextComponent text, ProgressStyle style, BoxStyle boxStyle) {
+		this(Arrays.asList(progress), text, style, boxStyle);
 	}
 
 	/**
@@ -87,7 +89,7 @@ public class ProgressView {
 	 * @param style progress style
 	 * @param boxStyle container box style
 	 */
-	public ProgressView(List<ProgressView.Part> progress, @Nullable Component text, ProgressStyle style, BoxStyle boxStyle) {
+	public ProgressView(List<ProgressView.Part> progress, @Nullable ITextComponent text, ProgressStyle style, BoxStyle boxStyle) {
 		this(style, boxStyle);
 		this.parts = Objects.requireNonNull(progress);
 		this.text = text;
@@ -101,7 +103,7 @@ public class ProgressView {
 	 */
 	public static ProgressView read(Data data) {
 		ProgressView view = new ProgressView(JadeUI.progressStyle(), BoxStyle.nestedBox());
-		view.parts = List.of(new PartBuilder()
+		view.parts = Arrays.asList(new PartBuilder()
 				.progress(data.progress)
 				.target(data.speed, data.target)
 				.messageType(data.messageType)
@@ -113,16 +115,20 @@ public class ProgressView {
 	 * Serialized progress payload.
 	 */
 	public record Data(float progress, float speed, float target, MessageType messageType) {
-		public static final StreamCodec<ByteBuf, Data> STREAM_CODEC = StreamCodec.composite(
-				ByteBufCodecs.FLOAT,
-				Data::progress,
-				ByteBufCodecs.FLOAT,
-				Data::speed,
-				ByteBufCodecs.FLOAT,
-				Data::target,
-				MessageType.STREAM_CODEC,
-				Data::messageType,
-				Data::new);
+		public static final DataCodec<Data> STREAM_CODEC = new DataCodec<>() {
+			@Override
+			public Data decode(PacketBuffer buf) {
+				return new Data(buf.readFloat(), buf.readFloat(), buf.readFloat(), MessageType.STREAM_CODEC.decode(buf));
+			}
+
+			@Override
+			public void encode(PacketBuffer buf, Data value) {
+				buf.writeFloat(value.progress);
+				buf.writeFloat(value.speed);
+				buf.writeFloat(value.target);
+				MessageType.STREAM_CODEC.encode(buf, value.messageType);
+			}
+		};
 
 		/**
 		 * Creates an info-style progress payload.

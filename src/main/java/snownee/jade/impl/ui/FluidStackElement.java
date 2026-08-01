@@ -4,14 +4,10 @@ import java.util.Objects;
 
 import org.jspecify.annotations.Nullable;
 
-import net.minecraft.client.KeyboardHandler;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.util.text.ITextComponent;
 import snownee.jade.api.fluid.JadeFluidObject;
 import snownee.jade.overlay.DisplayHelper;
-import snownee.jade.util.ComponentHolders;
 
 public class FluidStackElement extends ProgressOverlayElement {
 
@@ -23,12 +19,11 @@ public class FluidStackElement extends ProgressOverlayElement {
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+	public void extractRenderState(int mouseX, int mouseY, float partialTicks) {
 		if (floatingRect == null) {
-			DisplayHelper.INSTANCE.drawFluid(graphics, getX(), getY(), fluid, width, height, JadeFluidObject.bucketVolume());
+			DisplayHelper.INSTANCE.drawFluid(getX(), getY(), fluid, width, height, JadeFluidObject.bucketVolume());
 		} else {
 			DisplayHelper.INSTANCE.drawFluid(
-					graphics,
 					floatingRect.getX(),
 					floatingRect.getY(),
 					fluid,
@@ -39,17 +34,22 @@ public class FluidStackElement extends ProgressOverlayElement {
 	}
 
 	@Override
-	public @Nullable Component getNarration() {
+	public @Nullable ITextComponent getNarration() {
 		return null;
 	}
 
+	/**
+	 * 1.12.2: upstream serializes via {@code ComponentHolders.serialize(fluid.typeHolder(), ...)} against
+	 * the connection's registry access, neither of which exist here. Falls back to copying the fluid's
+	 * display name as a plain string.
+	 */
 	@Override
-	public boolean copyToClipboard(KeyboardHandler keyboardHandler) {
-		ClientPacketListener connection = Minecraft.getInstance().getConnection();
-		if (connection == null) {
-			return false;
+	public boolean copyToClipboard() {
+		ITextComponent name = fluid.getDisplayName();
+		if (name != null) {
+			GuiScreen.setClipboardString(name.getUnformattedText());
+			return true;
 		}
-		keyboardHandler.setClipboard(ComponentHolders.serialize(fluid.typeHolder(), fluid.getComponents(), connection.registryAccess()));
-		return true;
+		return false;
 	}
 }

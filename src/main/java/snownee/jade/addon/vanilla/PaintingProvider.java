@@ -1,8 +1,8 @@
 package snownee.jade.addon.vanilla;
 
-import net.minecraft.core.Holder;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.decoration.painting.Painting;
+import net.minecraft.entity.item.EntityPainting;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextComponentString;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IEntityComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -15,15 +15,17 @@ public class PaintingProvider implements IEntityComponentProvider {
 
 	@Override
 	public void appendTooltip(ITooltip tooltip, EntityAccessor accessor, IPluginConfig config) {
-		Painting painting = (Painting) accessor.getEntity();
-		painting.level().registryAccess().get(painting.getVariant().unwrapKey().orElseThrow()).map(Holder.Reference::value).ifPresent(variant -> {
-			variant.title().map(IThemeHelper.get()::warning).ifPresent(tooltip::add);
-			variant.author().ifPresent(tooltip::add);
-		});
+		EntityPainting painting = (EntityPainting) accessor.getEntity();
+		if (painting.art != null) {
+			// 1.12.2: paintings are a hardcoded EnumArt, not a registry variant. EnumArt only
+			// carries a title, so there is no author line and no registry lookup to perform.
+			String title = painting.art.title;
+			tooltip.add(IThemeHelper.get().warning(new TextComponentString(title)));
+		}
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.MC_PAINTING;
 	}
 }

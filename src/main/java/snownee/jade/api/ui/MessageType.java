@@ -2,10 +2,8 @@ package snownee.jade.api.ui;
 
 import java.util.function.IntFunction;
 
-import io.netty.buffer.ByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.util.ByIdMap;
+import net.minecraft.network.PacketBuffer;
+import snownee.jade.api.DataCodec;
 
 /**
  * Severity or presentation mode for a tooltip section.
@@ -13,11 +11,23 @@ import net.minecraft.util.ByIdMap;
 public enum MessageType {
 	NORMAL, INFO, TITLE, SUCCESS, WARNING, DANGER, FAILURE;
 
-	public static final IntFunction<MessageType> BY_ID = ByIdMap.continuous(
-			MessageType::ordinal,
-			values(),
-			ByIdMap.OutOfBoundsStrategy.ZERO);
-	public static final StreamCodec<ByteBuf, MessageType> STREAM_CODEC = ByteBufCodecs.idMapper(BY_ID, MessageType::ordinal);
+	public static final IntFunction<MessageType> BY_ID = i -> {
+		if (i < 0 || i >= values().length) {
+			return NORMAL;
+		}
+		return values()[i];
+	};
+	public static final DataCodec<MessageType> STREAM_CODEC = new DataCodec<>() {
+		@Override
+		public MessageType decode(PacketBuffer buf) {
+			return BY_ID.apply(buf.readVarInt());
+		}
+
+		@Override
+		public void encode(PacketBuffer buf, MessageType value) {
+			buf.writeVarInt(value.ordinal());
+		}
+	};
 
 	public static MessageType parse(String s) {
 		try {

@@ -2,12 +2,12 @@ package snownee.jade.addon.debug;
 
 import java.util.Collection;
 
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.block.properties.IProperty;
+import net.minecraft.block.properties.PropertyBool;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -22,26 +22,27 @@ public class BlockStatesProvider implements IBlockComponentProvider {
 
 	@Override
 	public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-		BlockState state = accessor.getBlockState();
-		Collection<Property<?>> properties = state.getProperties();
+		IBlockState state = accessor.getBlockState();
+		Collection<IProperty<?>> properties = state.getPropertyKeys();
 		if (properties.isEmpty()) {
 			return;
 		}
 		IThemeHelper t = IThemeHelper.get();
 		ITooltip box = JadeUI.tooltip();
-		properties.forEach(p -> {
+		for (IProperty<?> p : properties) {
 			Comparable<?> value = state.getValue(p);
-			MutableComponent valueText = Component.literal(" " + value).withStyle();
-			if (p instanceof BooleanProperty) {
-				valueText = value == Boolean.TRUE ? t.success(valueText) : t.danger(valueText);
+			// 1.12.2: PropertyBool replaces modern BooleanProperty.
+			ITextComponent valueText = new TextComponentString(" " + value);
+			if (p instanceof PropertyBool) {
+				valueText = Boolean.TRUE.equals(value) ? t.success(valueText) : t.danger(valueText);
 			}
-			box.add(Component.literal(p.getName() + ":").append(valueText));
-		});
+			box.add(new TextComponentString(p.getName() + ":").appendSibling(valueText));
+		}
 		tooltip.add(JadeUI.box(box, BoxStyle.nestedBox()).flexGrow(1));
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.DEBUG_BLOCK_STATES;
 	}
 

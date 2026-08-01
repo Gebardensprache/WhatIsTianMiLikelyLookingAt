@@ -1,6 +1,6 @@
 package snownee.jade.api.platform;
 
-import net.minecraft.world.level.block.Block;
+import net.minecraft.block.Block;
 
 /**
  * Platform-specific client registration hooks.

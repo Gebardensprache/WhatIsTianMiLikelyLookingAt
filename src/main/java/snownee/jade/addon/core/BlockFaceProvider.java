@@ -2,11 +2,11 @@ package snownee.jade.addon.core;
 
 import java.util.List;
 
-import net.minecraft.client.gui.layouts.LayoutElement;
-import net.minecraft.core.Direction;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
+import snownee.jade.api.ui.Element;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -21,14 +21,15 @@ public class BlockFaceProvider implements IBlockComponentProvider {
 	public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
 		tooltip.replace(
 				JadeIds.CORE_OBJECT_NAME, lists -> {
-					List<LayoutElement> lastList = lists.getLast();
-					lastList.add(JadeUI.text(Component.translatable("jade.blockFace", directionName(accessor.getSide()))));
+					// 1.12.2: no List.getLast() in Java 8
+					List<Element> lastList = lists.get(lists.size() - 1);
+					lastList.add(JadeUI.text(new TextComponentTranslation("jade.blockFace", directionName(accessor.getSide()))));
 					return lists;
 				});
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.CORE_BLOCK_FACE;
 	}
 
@@ -42,8 +43,8 @@ public class BlockFaceProvider implements IBlockComponentProvider {
 		return false;
 	}
 
-	public static MutableComponent directionName(Direction direction) {
-		return Component.translatable("jade." + direction.getSerializedName());
+	public static ITextComponent directionName(EnumFacing direction) {
+		return new TextComponentTranslation("jade." + direction.getName());
 	}
 
 }

@@ -4,12 +4,12 @@ import java.util.Collection;
 import java.util.Objects;
 import java.util.function.Predicate;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.fml.common.registry.ForgeRegistries;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
 import snownee.jade.api.IJadeProvider;
 
 /**
@@ -25,7 +25,7 @@ public interface ToolTier extends IJadeProvider {
 	 * @param predicate matching predicate
 	 * @return the new tier
 	 */
-	static ToolTier of(Identifier uid, ItemStack tool, Predicate<BlockState> predicate) {
+	static ToolTier of(ResourceLocation uid, ItemStack tool, Predicate<IBlockState> predicate) {
 		Objects.requireNonNull(tool);
 		return new SimpleToolTier(uid, tool, predicate);
 	}
@@ -37,7 +37,7 @@ public interface ToolTier extends IJadeProvider {
 	 * @return the new tier
 	 */
 	static ToolTier item(Item item) {
-		return item(BuiltInRegistries.ITEM.getKey(item), item);
+		return item(ForgeRegistries.ITEMS.getKey(item), item);
 	}
 
 	/**
@@ -47,8 +47,8 @@ public interface ToolTier extends IJadeProvider {
 	 * @param item item to display
 	 * @return the new tier
 	 */
-	static ToolTier item(Identifier uid, Item item) {
-		return item(uid, item.getDefaultInstance());
+	static ToolTier item(ResourceLocation uid, Item item) {
+		return item(uid, new ItemStack(item));
 	}
 
 	/**
@@ -58,7 +58,7 @@ public interface ToolTier extends IJadeProvider {
 	 * @param stack display stack
 	 * @return the new tier
 	 */
-	static ToolTier item(Identifier uid, ItemStack stack) {
+	static ToolTier item(ResourceLocation uid, ItemStack stack) {
 		return of(uid, stack, SimpleToolTier.isEffectiveTool(stack));
 	}
 
@@ -69,7 +69,7 @@ public interface ToolTier extends IJadeProvider {
 	 * @return the new tier
 	 */
 	static ToolTier alwaysFail(Item item) {
-		return alwaysFail(BuiltInRegistries.ITEM.getKey(item), item);
+		return alwaysFail(ForgeRegistries.ITEMS.getKey(item), item);
 	}
 
 	/**
@@ -79,8 +79,8 @@ public interface ToolTier extends IJadeProvider {
 	 * @param item item to display
 	 * @return the new tier
 	 */
-	static ToolTier alwaysFail(Identifier uid, Item item) {
-		return alwaysFail(uid, item.getDefaultInstance());
+	static ToolTier alwaysFail(ResourceLocation uid, Item item) {
+		return alwaysFail(uid, new ItemStack(item));
 	}
 
 	/**
@@ -90,7 +90,7 @@ public interface ToolTier extends IJadeProvider {
 	 * @param stack display stack
 	 * @return the new tier
 	 */
-	static ToolTier alwaysFail(Identifier uid, ItemStack stack) {
+	static ToolTier alwaysFail(ResourceLocation uid, ItemStack stack) {
 		return of(uid, stack, _ -> false);
 	}
 
@@ -100,7 +100,7 @@ public interface ToolTier extends IJadeProvider {
 	 * @param state block state to test
 	 * @return the evaluation result
 	 */
-	ToolResult isCorrectTool(BlockState state);
+	ToolResult isCorrectTool(IBlockState state);
 
 	/**
 	 * Adds additional blocks that should always match this tier.

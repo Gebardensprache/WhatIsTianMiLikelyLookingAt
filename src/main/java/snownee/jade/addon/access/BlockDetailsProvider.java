@@ -1,19 +1,16 @@
 package snownee.jade.addon.access;
 
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.BarrelBlock;
-import net.minecraft.world.level.block.BaseRailBlock;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.CreakingHeartBlock;
-import net.minecraft.world.level.block.RepeaterBlock;
-import net.minecraft.world.level.block.ShelfBlock;
-import net.minecraft.world.level.block.StairBlock;
-import net.minecraft.world.level.block.entity.trialspawner.TrialSpawnerState;
-import net.minecraft.world.level.block.entity.vault.VaultState;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.CreakingHeartState;
-import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockDoor;
+import net.minecraft.block.BlockEndPortalFrame;
+import net.minecraft.block.BlockFarmland;
+import net.minecraft.block.BlockPistonBase;
+import net.minecraft.block.BlockRailBase;
+import net.minecraft.block.BlockRailPowered;
+import net.minecraft.block.BlockRedstoneRepeater;
+import net.minecraft.block.BlockStairs;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.util.ResourceLocation;
 import snownee.jade.addon.core.ObjectNameProvider;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
@@ -24,76 +21,52 @@ import snownee.jade.api.config.IPluginConfig;
 public class BlockDetailsProvider implements IBlockComponentProvider {
 	@Override
 	public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-		BlockState blockState = accessor.getBlockState();
+		IBlockState blockState = accessor.getBlockState();
 		Block block = blockState.getBlock();
 		String objectName = tooltip.getString(JadeIds.CORE_OBJECT_NAME);
-		if (blockState.hasProperty(BlockStateProperties.OPEN) && !(block instanceof BarrelBlock)) {
+		if (blockState.getPropertyKeys().contains(BlockDoor.OPEN)) {
+			// 1.12.2: BarrelBlock does not exist, so the modern exclusion of barrels from the
+			// door branch is irrelevant -- all blocks carrying an "open" property are doors,
+			// trapdoors or fence gates, all of which read it the same way.
 			AccessibilityPlugin.replaceTitle(
 					tooltip,
 					objectName,
-					"block.door_" + (blockState.getValue(BlockStateProperties.OPEN) ? "open" : "closed"));
+					"block.door_" + (blockState.getValue(BlockDoor.OPEN) ? "open" : "closed"));
 		}
-		if (blockState.hasProperty(BlockStateProperties.WATERLOGGED) && blockState.getValue(BlockStateProperties.WATERLOGGED)) {
-			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.waterlogged");
-		}
-		if (blockState.hasProperty(BlockStateProperties.LIT) && blockState.getValue(BlockStateProperties.LIT)) {
-			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.lit");
-		}
-		if (blockState.hasProperty(BlockStateProperties.INVERTED) && blockState.getValue(BlockStateProperties.INVERTED)) {
-			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.inverted");
-		}
-		if (blockState.hasProperty(BlockStateProperties.EYE) && blockState.getValue(BlockStateProperties.EYE)) {
+		// WATERLOGGED, LIT, OMINOUS, CAN_SUMMON, VAULT_STATE, TRIAL_SPAWNER_STATE and
+		// CREAKING_HEART_STATE are all 1.13+/1.19+ properties with no 1.12.2 equivalents --
+		// dropped. "INVERTED" exists only on the redstone comparator in 1.12.2, and the
+		// modern "INVERTED" branch only triggers for the daylight detector (its modern
+		// INVERTED property), which does not exist here either -- the comparator equivalent
+		// is covered by its POWERED branch below.
+		if (blockState.getPropertyKeys().contains(BlockEndPortalFrame.EYE) && blockState.getValue(BlockEndPortalFrame.EYE)) {
 			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.eye");
 		}
-		if (blockState.hasProperty(BlockStateProperties.OMINOUS) && blockState.getValue(BlockStateProperties.OMINOUS)) {
-			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.ominous");
-		}
-		if (blockState.hasProperty(BlockStateProperties.MOISTURE) && blockState.getValue(BlockStateProperties.MOISTURE) == 7) {
+		if (blockState.getPropertyKeys().contains(BlockFarmland.MOISTURE) && blockState.getValue(BlockFarmland.MOISTURE) == 7) {
 			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.hydrated");
 		}
-		if (blockState.hasProperty(BlockStateProperties.LOCKED) && blockState.getValue(BlockStateProperties.LOCKED)) {
+		if (blockState.getPropertyKeys().contains(BlockRedstoneRepeater.LOCKED) && blockState.getValue(BlockRedstoneRepeater.LOCKED)) {
 			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.locked");
 		}
-		if (blockState.hasProperty(BlockStateProperties.EXTENDED) && blockState.getValue(BlockStateProperties.EXTENDED)) {
+		if (blockState.getPropertyKeys().contains(BlockPistonBase.EXTENDED) && blockState.getValue(BlockPistonBase.EXTENDED)) {
 			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.extended");
 		}
-		if (blockState.hasProperty(BlockStateProperties.CAN_SUMMON) && blockState.getValue(BlockStateProperties.CAN_SUMMON)) {
-			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.summonable");
-		}
-		if (blockState.getBlock() instanceof StairBlock && blockState.getValue(StairBlock.HALF) == Half.TOP) {
+		// 1.12.2: turtle eggs do not exist, so the modern HATCH branch is dropped.
+		if (blockState.getBlock() instanceof BlockStairs && blockState.getValue(BlockStairs.HALF) == BlockStairs.EnumHalf.TOP) {
 			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.upside_down");
 		}
-		if (blockState.hasProperty(BlockStateProperties.HATCH)) {
-			int i = blockState.getValue(BlockStateProperties.HATCH);
-			if (i == 1) {
-				AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.hatch.1");
-			} else if (i == 2) {
-				AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.hatch.2");
-			}
-		}
-		if (blockState.hasProperty(BlockStateProperties.POWERED) && blockState.getValue(BlockStateProperties.POWERED)) {
-			if (block instanceof RepeaterBlock || block instanceof BaseRailBlock || block instanceof ShelfBlock) {
-				AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.powered");
-			}
-		}
-		boolean active = false;
-		if (blockState.hasProperty(BlockStateProperties.VAULT_STATE) &&
-				blockState.getValue(BlockStateProperties.VAULT_STATE) == VaultState.ACTIVE) {
-			active = true;
-		} else if (blockState.hasProperty(BlockStateProperties.TRIAL_SPAWNER_STATE) &&
-				blockState.getValue(BlockStateProperties.TRIAL_SPAWNER_STATE) == TrialSpawnerState.ACTIVE) {
-			active = true;
-		} else if (blockState.getBlock() instanceof CreakingHeartBlock &&
-				blockState.getValue(BlockStateProperties.CREAKING_HEART_STATE) != CreakingHeartState.UPROOTED) {
-			active = true;
-		}
-		if (active) {
-			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.active");
+		// 1.12.2: ShelfBlock does not exist; the modern RepeaterBlock/BaseRailBlock/ShelfBlock
+		// branch reduces to its BaseRailBlock intent (rail, powered rail, detector rail).
+		// The property-name check alone cannot stand: BlockStateContainer maps properties by
+		// structural equality (valueClass + name), so levers, buttons, pressure plates and
+		// tripwire also declare a PropertyBool "powered" and would be mislabeled.
+		if (blockState.getBlock() instanceof BlockRailBase && blockState.getPropertyKeys().contains(BlockRailPowered.POWERED) && blockState.getValue(BlockRailPowered.POWERED)) {
+			AccessibilityPlugin.replaceTitle(tooltip, objectName, "block.powered");
 		}
 	}
 
 	@Override
-	public Identifier getUid() {
+	public ResourceLocation getUid() {
 		return JadeIds.ACCESS_BLOCK_DETAILS;
 	}
 

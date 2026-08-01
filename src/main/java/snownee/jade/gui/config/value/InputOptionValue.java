@@ -5,42 +5,44 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.network.chat.TextColor;
+import net.minecraft.client.gui.GuiTextField;
+import snownee.jade.gui.config.JadeWidget;
+import snownee.jade.gui.config.NotUglyEditBox;
+import snownee.jade.gui.config.OptionsList;
 
 public class InputOptionValue<T> extends OptionValue<T> {
 
 	public static final Predicate<String> INTEGER = s -> s.matches("[-+]?[0-9]+");
 	public static final Predicate<String> FLOAT = s -> s.matches("[-+]?([0-9]*[.,][0-9]+|[0-9]+)");
 
-	private final EditBox textField;
+	private final GuiTextField textField;
 	private final Predicate<String> validator;
 
 	public InputOptionValue(Runnable responder, String optionName, Supplier<T> getter, Consumer<T> setter, Predicate<String> validator) {
 		super(optionName, getter, setter);
 		this.validator = validator;
-		textField = new EditBox(font, 0, 0, 98, 18, title());
+		textField = new NotUglyEditBox(font.raw(), 0, 0, 98, 18, title());
 		updateValue();
-		textField.setResponder(s -> {
+		((NotUglyEditBox) textField).setResponder(s -> {
 			if (this.validator.test(s)) {
 				setValue(s);
-				textField.setTextColor(TextColor.WHITE.getValue() | 0xFF000000);
+				textField.setTextColor(0xFFFFFFFF);
 			} else {
-				textField.setTextColor(TextColor.RED.getValue() | 0xFF000000);
+				textField.setTextColor(0xFFFF5555);
 			}
 			responder.run();
 		});
-		addWidget(textField, 0);
+		addWidget(new OptionsList.EntryWidget(new JadeWidget.TextField(textField), 0, -textField.height / 2, true));
 	}
 
 	@Override
 	public boolean isValidValue() {
-		return validator.test(textField.getValue());
+		return validator.test(textField.getText());
 	}
 
 	@Override
 	public void setValue(T value) {
-		textField.setValue(String.valueOf(value));
+		textField.setText(String.valueOf(value));
 	}
 
 	@SuppressWarnings("unchecked")
@@ -49,15 +51,18 @@ public class InputOptionValue<T> extends OptionValue<T> {
 			value = (T) text;
 		}
 		try {
-			switch (value) {
-				case Integer ignored -> value = (T) Integer.valueOf(text);
-				case Short ignored -> value = (T) Short.valueOf(text);
-				case Byte ignored -> value = (T) Byte.valueOf(text);
-				case Long ignored -> value = (T) Long.valueOf(text);
-				case Double ignored -> value = (T) Double.valueOf(text);
-				case Float ignored -> value = (T) Float.valueOf(text);
-				default -> {
-				}
+			if (value instanceof Integer) {
+				value = (T) Integer.valueOf(text);
+			} else if (value instanceof Short) {
+				value = (T) Short.valueOf(text);
+			} else if (value instanceof Byte) {
+				value = (T) Byte.valueOf(text);
+			} else if (value instanceof Long) {
+				value = (T) Long.valueOf(text);
+			} else if (value instanceof Double) {
+				value = (T) Double.valueOf(text);
+			} else if (value instanceof Float) {
+				value = (T) Float.valueOf(text);
 			}
 		} catch (NumberFormatException ignored) {
 		}
@@ -69,7 +74,7 @@ public class InputOptionValue<T> extends OptionValue<T> {
 		T newValue = getter.get();
 		if (!Objects.equals(value, newValue)) {
 			value = newValue;
-			textField.setValue(String.valueOf(value));
+			textField.setText(String.valueOf(value));
 		}
 	}
 

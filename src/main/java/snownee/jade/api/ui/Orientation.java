@@ -1,6 +1,5 @@
 package snownee.jade.api.ui;
 
-import net.minecraft.client.gui.layouts.LayoutElement;
 import snownee.jade.gui.JadeLinearLayout;
 import snownee.jade.gui.ResizeableLayout;
 
