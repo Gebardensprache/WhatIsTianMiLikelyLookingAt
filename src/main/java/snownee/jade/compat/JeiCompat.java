@@ -12,7 +12,7 @@ import net.minecraft.util.ResourceLocation;
 import snownee.jade.api.JadeIds;
 
 /**
- * 1.12.2 port of modern {@code JEICompat}: exposes Jade's recipe lookup through
+ * 1.12.2 port of modern {@code JeiCompat}: exposes Jade's recipe lookup through
  * JEI 4.x. Modern's JEI API ({@code IRecipeRegistration}, {@code IJeiHelpers},
  * {@code IFocusFactory}, {@code RecipeIngredientRole}) does not exist here; the
  * equivalent is {@code IJeiRuntime.getRecipeRegistry().createFocus(IFocus.Mode, V)}
