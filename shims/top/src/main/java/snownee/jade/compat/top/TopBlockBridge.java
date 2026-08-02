@@ -55,7 +55,7 @@ public class TopBlockBridge implements IServerDataProvider<BlockAccessor> {
 			try {
 				provider.addProbeInfo(ProbeMode.NORMAL, capture, accessor.getPlayer(),
 						accessor.getLevel(), state, hitData);
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				LOGGER.error("TOP provider {} threw", provider.getID(), e);
 			}
 		}
@@ -65,7 +65,7 @@ public class TopBlockBridge implements IServerDataProvider<BlockAccessor> {
 			try {
 				probeAccessor.addProbeInfo(ProbeMode.NORMAL, capture, accessor.getPlayer(),
 						accessor.getLevel(), state, hitData);
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				LOGGER.error("IProbeInfoAccessor on {} threw", state.getBlock(), e);
 			}
 		}

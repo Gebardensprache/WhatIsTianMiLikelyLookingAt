@@ -19,6 +19,54 @@ public class ConfigSetup {
 
     public static int loggingThrowableTimeout = 20000;
 
+    public static final int PROBE_NOTNEEDED = 0;
+    public static final int PROBE_NEEDED = 1;
+    public static final int PROBE_NEEDEDHARD = 2;
+    public static final int PROBE_NEEDEDFOREXTENDED = 3;
+    public static int needsProbe = PROBE_NEEDEDFOREXTENDED;
+
+    public static boolean extendedInMain = false;
+    public static int timeout = 300;
+    public static int waitingForServerTimeout = 2000;
+    public static int maxPacketToServer = 20000;
+
+    public static boolean supportBaubles = true;
+    public static boolean spawnNote = true;
+
+    public static int showSmallChestContentsWithoutSneaking = 0;
+    // NOTE: "Thresshold" is a typo in the original TOP and integrations reference it as-is.
+    public static int showItemDetailThresshold = 4;
+    public static String[] showContentsWithoutSneaking = {"storagedrawers:basicDrawers", "storagedrawersextra:extra_drawers"};
+    public static String[] dontShowContentsUnlessSneaking = {};
+    public static String[] dontSendNBT = {};
+
+    public static float probeDistance = 6;
+    public static boolean showLiquids = false;
+    public static boolean isVisible = true;
+    public static boolean compactEqualStacks = true;
+    public static boolean holdKeyToMakeVisible = false;
+
+    public static boolean showDebugInfo = true;
+
+    public static int showBreakProgress = 1;    // 0 == off, 1 == bar, 2 == text
+    public static boolean harvestStyleVanilla = true;
+
+    public static int chestContentsBorderColor = 0xff006699;
+
+    public static float tooltipScale = 1.0f;
+
+    // RF bar colors (values from real TOP's ConfigSetup)
+    public static int rfbarFilledColor = 0xffdd0000;
+    public static int rfbarAlternateFilledColor = 0xff430000;
+    public static int rfbarBorderColor = 0xff555555;
+    public static mcjty.theoneprobe.api.NumberFormat rfFormat = mcjty.theoneprobe.api.NumberFormat.COMPACT;
+
+    // Tank bar colors (values from real TOP's ConfigSetup)
+    public static int tankbarFilledColor = 0xff0000dd;
+    public static int tankbarAlternateFilledColor = 0xff000043;
+    public static int tankbarBorderColor = 0xff555555;
+    public static mcjty.theoneprobe.api.NumberFormat tankFormat = mcjty.theoneprobe.api.NumberFormat.COMPACT;
+
     public static Map<TextStyleClass, String> defaultTextStyleClasses = new HashMap<>();
     public static Map<TextStyleClass, String> textStyleClasses = new HashMap<>();
 

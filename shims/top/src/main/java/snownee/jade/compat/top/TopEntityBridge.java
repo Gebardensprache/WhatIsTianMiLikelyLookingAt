@@ -44,7 +44,7 @@ public class TopEntityBridge implements IServerDataProvider<EntityAccessor> {
 			try {
 				provider.addProbeEntityInfo(ProbeMode.NORMAL, capture, accessor.getPlayer(),
 						accessor.getLevel(), accessor.getEntity(), hitData);
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				LOGGER.error("TOP entity provider {} threw", provider.getID(), e);
 			}
 		}
