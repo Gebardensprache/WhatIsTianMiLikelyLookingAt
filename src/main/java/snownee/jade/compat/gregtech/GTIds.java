@@ -11,5 +11,8 @@ public interface GTIds {
 	ResourceLocation GT_CONTROLLABLE = gregtechId("controllable");
 	ResourceLocation GT_CONVERTER = gregtechId("converter");
 	ResourceLocation GT_ENERGY_CONTAINER = gregtechId("energy_container");
+	ResourceLocation GT_DIODE = gregtechId("diode");
+	ResourceLocation GT_LD_PIPE = gregtechId("long_distance_pipe");
+	ResourceLocation GT_LAMP = gregtechId("lamp");
 
 }
