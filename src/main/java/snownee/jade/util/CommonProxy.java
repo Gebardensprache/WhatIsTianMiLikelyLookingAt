@@ -46,7 +46,6 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.boss.EntityDragon;
 import net.minecraft.entity.boss.EntityWither;
-import net.minecraft.entity.passive.AbstractHorse;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.potion.PotionEffect;
 import net.minecraft.tileentity.TileEntity;
@@ -132,17 +131,6 @@ public final class CommonProxy {
 		Object target = accessor.getTarget();
 		if (target instanceof EntityPlayer) {
 			return ItemCollector.EMPTY;
-		}
-		// 1.12.2: the AbstractHorseAccess mixin was replaced with a jade_at.cfg entry
-		// exposing AbstractHorse.horseChest directly (see B7-mixin).
-		if (target instanceof AbstractHorse) {
-			return new ItemCollector<>(new ItemIterator.ContainerItemIterator(
-					o -> {
-						if (o instanceof AbstractHorse horse) {
-							return horse.horseChest;
-						}
-						return null;
-					}, 2));
 		}
 		if (!(target instanceof TileEntityChest)) {
 			try {
@@ -411,9 +399,7 @@ public final class CommonProxy {
 	}
 
 	@Nullable
-	public static <T> T getDefaultStorage(
-			Accessor<?> accessor,
-			Capability<T> capability) {
+	public static <T> T getDefaultStorage(Accessor<?> accessor, Capability<T> capability) {
 		if (accessor instanceof BlockAccessor blockAccessor) {
 			Object target = accessor.getTarget();
 			if (target instanceof TileEntity te && te.hasCapability(capability, blockAccessor.getSide())) {
@@ -428,9 +414,7 @@ public final class CommonProxy {
 		return null;
 	}
 
-	public static <T> boolean hasDefaultStorage(
-			Accessor<?> accessor,
-			Capability<T> capability) {
+	public static <T> boolean hasDefaultStorage(Accessor<?> accessor, Capability<T> capability) {
 		if (accessor instanceof BlockAccessor || accessor instanceof EntityAccessor) {
 			return getDefaultStorage(accessor, capability) != null;
 		}

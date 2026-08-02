@@ -41,11 +41,9 @@ public class HorseStatsProvider implements IEntityComponentProvider {
 		IThemeHelper t = IThemeHelper.get();
 		ITextComponent valueText = t.info(DisplayHelper.dfCommas.format(value));
 		if (showMax) {
-			return (ITextComponent) new TextComponentTranslation(
-					key,
-					new TextComponentTranslation("jade.fraction", valueText, DisplayHelper.dfCommas.format(max)));
+			return new TextComponentTranslation(key, new TextComponentTranslation("jade.fraction", valueText, DisplayHelper.dfCommas.format(max)));
 		} else {
-			return (ITextComponent) new TextComponentTranslation(key, valueText);
+			return new TextComponentTranslation(key, valueText);
 		}
 	}
 

@@ -65,18 +65,17 @@ public class EntityDetailsBodyProvider implements IEntityComponentProvider {
 		// EntityLiving#getLeashed: every leashed EntityLiving whose leash holder is the
 		// target entity (or its leash knot) is "being leashed to" it. This is bounded to a
 		// region around the target, which is how the modern implementation bounds it too.
-		Entity target = entity;
 		List<EntityLiving> leashedTo = null;
-		if (target.world != null) {
-			AxisAlignedBB box = target.getEntityBoundingBox().grow(7.0D, 7.0D, 7.0D);
-			List<EntityLiving> candidates = target.world.getEntitiesWithinAABB(EntityLiving.class, box);
+		if (entity.world != null) {
+			AxisAlignedBB box = entity.getEntityBoundingBox().grow(7.0D, 7.0D, 7.0D);
+			List<EntityLiving> candidates = entity.world.getEntitiesWithinAABB(EntityLiving.class, box);
 			if (!candidates.isEmpty()) {
 				leashedTo = Lists.newArrayList();
 				for (EntityLiving candidate : candidates) {
-					if (candidate != target && candidate.getLeashed()) {
+					if (candidate != entity && candidate.getLeashed()) {
 						Entity holder = candidate.getLeashHolder();
-						if (holder == target || (holder instanceof EntityLeashKnot &&
-								((EntityLeashKnot) holder).getPosition().equals(target.getPosition()))) {
+						if (holder == entity || (holder instanceof EntityLeashKnot &&
+								holder.getPosition().equals(entity.getPosition()))) {
 							leashedTo.add(candidate);
 						}
 					}
@@ -98,20 +97,12 @@ public class EntityDetailsBodyProvider implements IEntityComponentProvider {
 				poseId = 2;
 			}
 		} else if (entity instanceof EntityLivingBase) {
-			if (((EntityLivingBase) entity).isSneaking()) {
+			if (entity.isSneaking()) {
 				poseId = 5;
 			}
 		}
-		// The modern TamableAnimal/panda/camel/fox sitting branches are replaced by the
-		// 1.12.2 sitting-capable animals: EntityTameable#isSitting (wolves, cats,
-		// ocelots), EntityWolf and EntityOcelot re-implement it directly. Foxes, pandas,
-		// camels, axolotls and armadillos do not exist in 1.12.2 (their pose ids 10, 1000
-		// and 1001 are unreachable here); sleeping foxes have no counterpart either.
-		if (entity instanceof EntityTameable && ((EntityTameable) entity).isSitting()) {
-			poseId = 10;
-		} else if (entity instanceof EntityWolf && ((EntityWolf) entity).isSitting()) {
-			poseId = 10;
-		} else if (entity instanceof EntityOcelot && ((EntityOcelot) entity).isSitting()) {
+
+		if (entity instanceof EntityTameable tameable && tameable.isSitting()) {
 			poseId = 10;
 		}
 		return poseId;

@@ -49,7 +49,10 @@ public class ElementDto {
 		NBTTagCompound tag = new NBTTagCompound();
 		tag.setInteger("type", type);
 		if (!text.isEmpty()) tag.setString("text", text);
-		if (!stack.isEmpty()) tag.setTag("stack", stack.writeToNBT(new NBTTagCompound()));
+		if (!stack.isEmpty()) {
+			tag.setTag("stack", stack.writeToNBT(new NBTTagCompound()));
+			tag.setInteger("stackCount", stack.getCount());
+		}
 		if (type == PROGRESS) {
 			tag.setLong("current", current);
 			tag.setLong("max", max);
@@ -82,6 +85,9 @@ public class ElementDto {
 		dto.text = tag.getString("text");
 		if (tag.hasKey("stack", Constants.NBT.TAG_COMPOUND)) {
 			dto.stack = new ItemStack(tag.getCompoundTag("stack"));
+			if (tag.hasKey("stackCount")) {
+				dto.stack.setCount(tag.getInteger("stackCount"));
+			}
 		}
 		dto.current = tag.getLong("current");
 		dto.max = tag.getLong("max");

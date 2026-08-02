@@ -64,12 +64,16 @@ public class ItemStorageProvider<T extends Accessor<?>> implements IServerDataPr
 	private static final DataCodec<ItemStack> ITEM_STACK_CODEC = new DataCodec<>() {
 		@Override
 		public ItemStack decode(PacketBuffer buf) {
-			return DataCodec.readStack(buf);
+			ItemStack stack = DataCodec.readStack(buf);
+			int count = buf.readVarInt();
+			stack.setCount(count);
+			return stack;
 		}
 
 		@Override
 		public void encode(PacketBuffer buf, ItemStack value) {
 			buf.writeItemStack(value);
+			buf.writeVarInt(value.getCount());
 		}
 	};
 	private static final DataCodec<Map.Entry<ResourceLocation, List<ViewGroup<ItemStack>>>> STREAM_CODEC = ViewGroup.listCodec(ITEM_STACK_CODEC);
@@ -130,7 +134,7 @@ public class ItemStorageProvider<T extends Accessor<?>> implements IServerDataPr
 				}
 			}
 
-			boolean renderGroup = groups.size() > 1 || groups.get(0).shouldRenderGroup();
+			boolean renderGroup = groups.size() > 1 || groups.getFirst().shouldRenderGroup();
 			ClientViewGroup.tooltip(tooltip, groups, renderGroup, (theTooltip, group) -> {
 				if (renderGroup) {
 					theTooltip.add(new HorizontalLineElement());

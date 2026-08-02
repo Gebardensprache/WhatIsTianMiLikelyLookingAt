@@ -54,6 +54,18 @@ class ElementDtoCodecTest {
 	}
 
 	@Test
+	void roundTripItemStackLargeCount() {
+		ElementDto dto = new ElementDto();
+		dto.type = ElementDto.ITEM;
+		dto.stack = new ItemStack(Items.DIAMOND, 192);
+		NBTTagCompound tag = dto.toNbt();
+		ElementDto decoded = ElementDto.fromNbt(tag);
+		assertThat(decoded.stack.getItem()).isEqualTo(Items.DIAMOND);
+		assertThat(decoded.stack.getCount()).isEqualTo(192);
+		assertThat(decoded.stack.isEmpty()).isFalse();
+	}
+
+	@Test
 	void roundTripNestedChildren() {
 		ElementDto parent = new ElementDto();
 		parent.type = ElementDto.VERTICAL;
