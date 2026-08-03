@@ -36,6 +36,7 @@ dependencies {
     runtimeOnly(deps.hei)
     implementation(deps.codeChickenLib) { isTransitive = false }
     implementation(deps.gregtech) { isTransitive = false }
+    implementation(deps.ae2uel) { isTransitive = false }
 }
 
 configurations {

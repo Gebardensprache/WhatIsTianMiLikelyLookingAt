@@ -1,7 +1,7 @@
 package snownee.jade.compat.gregtech.provider;
 
-import gregtech.api.capability.GregtechCapabilities;
-import gregtech.api.capability.IEnergyContainer;
+import gregtech.api.capability.GregtechTileCapabilities;
+import gregtech.api.capability.ILaserContainer;
 import gregtech.api.metatileentity.MetaTileEntityHolder;
 import net.minecraft.util.ResourceLocation;
 
@@ -21,8 +21,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public class ElectricContainerDataProvider implements IServerExtensionProvider<EnergyView.Data>, IClientExtensionProvider<EnergyView.Data, EnergyView> {
-	public static final ElectricContainerDataProvider INSTANCE = new ElectricContainerDataProvider();
+public class LaserContainerInfoProvider implements IServerExtensionProvider<EnergyView.Data>, IClientExtensionProvider<EnergyView.Data, EnergyView> {
+	public static final LaserContainerInfoProvider INSTANCE = new LaserContainerInfoProvider();
 
 	@Override
 	public List<ClientViewGroup<EnergyView>> getClientGroups(Accessor<?> accessor, List<ViewGroup<EnergyView.Data>> groups) {
@@ -35,9 +35,9 @@ public class ElectricContainerDataProvider implements IServerExtensionProvider<E
 
 	@Override
 	public @Nullable List<ViewGroup<EnergyView.Data>> getGroups(Accessor<?> accessor) {
-		if (accessor instanceof BlockAccessor blockAccessor) {
-			MetaTileEntityHolder holder = blockAccessor.typedBlockEntity();
-			IEnergyContainer capability = holder.getMetaTileEntity().getCapability(GregtechCapabilities.CAPABILITY_ENERGY_CONTAINER, null);
+		if (accessor instanceof BlockAccessor blockAccessor && blockAccessor.getBlockEntity() instanceof MetaTileEntityHolder holder && holder.getMetaTileEntity().hasCapability(
+				GregtechTileCapabilities.CAPABILITY_LASER, null)) {
+			ILaserContainer capability = holder.getMetaTileEntity().getCapability(GregtechTileCapabilities.CAPABILITY_LASER, null);
 			if (capability != null) {
 				var group = new ViewGroup<>(List.of(new EnergyView.Data(capability.getEnergyStored(), capability.getEnergyCapacity())));
 				group.getExtraData().setString("Unit", " EU");
@@ -48,13 +48,7 @@ public class ElectricContainerDataProvider implements IServerExtensionProvider<E
 	}
 
 	@Override
-	public boolean shouldRequestData(Accessor<?> accessor) {
-		return accessor instanceof BlockAccessor blockAccessor && blockAccessor.getBlockEntity() instanceof MetaTileEntityHolder holder && holder.getMetaTileEntity().hasCapability(
-				GregtechCapabilities.CAPABILITY_ENERGY_CONTAINER, null);
-	}
-
-	@Override
 	public ResourceLocation getUid() {
-		return GTIds.GT_ENERGY_CONTAINER;
+		return GTIds.GT_LASER_CONTAINER;
 	}
 }

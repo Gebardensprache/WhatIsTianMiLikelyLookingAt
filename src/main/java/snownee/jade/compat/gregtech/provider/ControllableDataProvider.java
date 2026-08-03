@@ -25,7 +25,7 @@ public class ControllableDataProvider implements StreamServerDataProvider<BlockA
 	@Override
 	public @Nullable Boolean streamData(BlockAccessor accessor) {
 		MetaTileEntityHolder te = accessor.typedBlockEntity();
-		if (te instanceof IControllable controllable) {
+		if (te.getMetaTileEntity() instanceof IControllable controllable) {
 			return controllable.isWorkingEnabled();
 		}
 		return null;
